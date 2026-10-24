@@ -192,6 +192,16 @@ test("full contribution, revision, credit, application and accepted invitation a
   await student.getByRole("button", { name: "Send application", exact: false }).click();
   await expect(student.getByText("Application sent", { exact: true })).toBeVisible();
   await lead.goto("/?view=applicants");
+  await expect(lead.getByText("No profile interests shared.")).toBeVisible();
+  await student.goto("/?view=profile");
+  await student.getByLabel("Interests", { exact: true }).fill("Robotics, Sustainable design");
+  await student.getByRole("button", { name: "Save profile", exact: true }).click();
+  await expect(student.getByText("Profile updated.", { exact: true })).toBeVisible();
+  await lead.reload();
+  await expect(lead.getByText("Profile interests · current", { exact: true })).toBeVisible();
+  await expect(lead.getByText("Robotics, Sustainable design")).toBeVisible();
+  await expect(lead.getByText("I want to learn how robotics teams test route assumptions responsibly.")).toBeVisible();
+  await student.goto("/?view=applications");
   await lead.getByRole("button", { name: "Invite to team", exact: true }).click();
   await expect(lead.getByText("Invitation sent. Membership starts when the student accepts.")).toBeVisible();
   const beforeAccept = await (await student.request.get("/api/data")).json();

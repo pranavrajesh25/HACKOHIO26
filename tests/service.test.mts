@@ -71,6 +71,20 @@ test("an application must link an owned, same-project approved contribution", ()
   const payload = { submission, role: "Route research", availability: "Tuesdays 2–4pm", interests: "Learning more about route planning" };
   const application = String(act(student, "apply", project, payload).id);
   assert.equal(act(student, "apply", project, payload).id, application);
+  const viewer = (id: string) => getData({ id, name: id, email: `${id}@example.test` });
+  assert.equal(viewer(lead).applications.find(a => a.id === application)?.profile_interests, "");
+  act(student, "profile", "", { name: "Test Student", interests: "Robotics, Sustainable design" });
+  assert.equal(viewer(lead).applications.find(a => a.id === application)?.profile_interests, "Robotics, Sustainable design");
+  assert.equal(viewer(student).applications.find(a => a.id === application)?.profile_interests, "Robotics, Sustainable design");
+  assert.equal(viewer(lead).applications.find(a => a.id === application)?.interests, payload.interests);
+  assert.deepEqual(viewer(stranger).applications, []);
+  assert.deepEqual(getData().applications, []);
+  // Reviewing contributions does not grant access to private applications/profiles.
+  db.prepare("INSERT INTO memberships (project_id,user_id,role) VALUES (?,?,'reviewer')").run(project, stranger);
+  assert.deepEqual(viewer(stranger).applications, []);
+  db.prepare("DELETE FROM memberships WHERE project_id=? AND user_id=?").run(project, stranger);
+  act(student, "profile", "", { name: "Test Student", interests: "" });
+  assert.equal(viewer(lead).applications.find(a => a.id === application)?.profile_interests, "");
   rejects(() => act(student, "application-status", application, "invited"), 403);
   rejects(() => act(stranger, "application-status", application, "accepted"), 403);
   rejects(() => act(student, "application-status", application, "accepted"), 409);
