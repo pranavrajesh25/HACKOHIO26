@@ -1,4 +1,62 @@
 import { test, expect, type Page } from "@playwright/test";
+import { type TaskContent } from "../../lib/content";
+import { energyTask } from "../fixtures/energy-task";
+
+test("voice project drafting records audio, fills editable fields, and preserves edits on failure or cancellation", async ({ page }) => {
+  await register(page, "Voice Lead", `voice-${Date.now()}@example.test`);
+  await page.goto("/?view=editor");
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const context = new AudioContext(); const oscillator = context.createOscillator();
+      const destination = context.createMediaStreamDestination(); oscillator.connect(destination); oscillator.start();
+      return destination.stream;
+    };
+  });
+  const fields = { title: `Voice Garden ${Date.now()}`, problem: "Students need practical ways to explore gardening.", goal: "Investigate a welcoming beginner garden pilot.", description: "A student-led project exploring how beginners can contribute to a small campus garden pilot.", topic: "Environment", disciplines: "Suggested: Biology, Design", materials: "Suggested: Prepare a fictional garden scenario.", team: "Team details to be confirmed by the lead.", roles: "Suggested: Research assistant", duration: "Suggested: 4 weeks", commitment: "Suggested: 1 hour weekly" };
+  let calls = 0;
+  await page.route("**/api/project-voice", async route => {
+    calls++;
+    if (calls === 1) {
+      expect(route.request().headers()["content-type"]).toBe("audio/wav");
+      const bytes = route.request().postDataBuffer()!; expect(bytes.toString("ascii", 0, 4)).toBe("RIFF");
+      expect(bytes.length).toBeGreaterThan(44); expect(bytes.length).toBeLessThanOrEqual(1920044);
+    }
+    if (calls === 3) return route.fulfill({ status: 502, json: { transcript: "We want a small campus garden project for beginners.", error: "Project drafting failed. Your form is unchanged." } });
+    await route.fulfill({ json: { transcript: "We want a small campus garden project for beginners.", fields, suggestedFields: ["duration", "materials", "roles"] } });
+  });
+  await page.getByRole("button", { name: "Record description", exact: true }).click();
+  await expect(page.getByText("Recording 1s / 60s", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Stop recording", exact: true }).click();
+  await expect(page.getByLabel("Recorded project description")).toBeVisible();
+  await page.getByRole("button", { name: "Generate project draft from recording" }).click();
+  await expect(page.getByLabel("Project title", { exact: true })).toHaveValue(fields.title);
+  await expect(page.getByText("AI-suggested draft applied. Review all fields.", { exact: true })).toBeVisible();
+  await page.getByLabel("Project title", { exact: true }).fill("Keep my edited title");
+  page.once("dialog", dialog => dialog.dismiss());
+  await page.getByRole("button", { name: "Generate project draft from text" }).click();
+  await expect(page.getByRole("button", { name: "Generate project draft from text" })).toBeEnabled();
+  await expect(page.getByLabel("Project title", { exact: true })).toHaveValue("Keep my edited title");
+  await page.getByRole("button", { name: "Generate project draft from text" }).click();
+  await expect(page.getByRole("region", { name: "Voice project draft" }).getByRole("alert")).toContainText("Project drafting failed");
+  await expect(page.getByLabel("Project title", { exact: true })).toHaveValue("Keep my edited title");
+  await page.clock.install();
+  await page.getByRole("button", { name: "Re-record description", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Stop recording", exact: true })).toBeVisible();
+  await page.clock.fastForward(61000);
+  await expect(page.getByText("Recording ready (60s)", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop recording", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Save project draft", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Keep my edited title", exact: true })).toBeVisible();
+  const data = await (await page.request.get("/api/data")).json();
+  expect(data.projects.find((p: { title: string }) => p.title === "Keep my edited title").status).toBe("draft");
+});
+
+async function fillTask(page: Page, content: TaskContent) {
+  for (const [label, key] of [["Task title", "title"], ["Learning goal", "learningGoal"], ["Prerequisites", "prerequisites"], ["Estimated duration", "duration"], ["Instructions", "instructions"], ["References to supplied materials", "materials"], ["Expected deliverable", "deliverable"], ["Human review criteria", "criteria"], ["Optional hints", "hints"], ["Missing information to resolve before publication", "missingInformation"]] as const) {
+    await expect(page.getByLabel(label, { exact: true })).toHaveValue("");
+    await page.getByLabel(label, { exact: true }).fill(content[key]);
+  }
+}
 
 async function register(page: Page, name: string, email: string) {
   await page.goto("/");
@@ -28,23 +86,23 @@ test("full contribution, revision, credit, application and accepted invitation a
   expect(publicDrafts.projects.some((p: { id: string }) => p.id === projectId)).toBe(false);
   await lead.getByRole("button", { name: "Publish project", exact: true }).click();
   await lead.getByRole("link", { name: "Add task", exact: false }).click();
+  await fillTask(lead, energyTask);
   await lead.getByRole("button", { name: "Save task draft" }).click();
-  await expect(lead.getByRole("checkbox")).toBeVisible();
-  await lead.getByRole("checkbox").check();
+  await expect(lead.getByRole("checkbox", { name: /I have reviewed/ })).toBeVisible();
+  await lead.getByRole("checkbox", { name: /I have reviewed/ }).check();
   await lead.getByRole("button", { name: "Approve & publish task" }).click();
   await expect(lead.getByText("Owner-approved task published.", { exact: true })).toBeVisible();
   data = await (await lead.request.get("/api/data")).json(); const task = data.tasks.find((t: { project_id: string }) => t.project_id === projectId);
 
   await register(student, "Demo Student", `student-${suffix}@example.test`);
   await student.goto(`/?view=workspace&id=${task.id}`);
-  await student.getByRole("radio", { name: "B", exact: false }).check();
-  const explanation = "I recommend route B because route A has stairs that the robot cannot climb, while route C is blocked by construction. The longer level path avoids both known obstacles.";
-  await student.getByLabel("Walk us through your thinking", { exact: false }).fill(explanation);
-  await student.getByLabel("What would you need to check?", { exact: false }).fill("I would check pedestrian traffic before testing this route.");
+  await expect(student.getByRole("radio")).toHaveCount(0);
+  const explanation = "At 20:00 the fictional building uses 79 kW while closed, compared with 46 kW at noon while open. Equipment scheduling or meter errors could explain this, but neither is proven by this table.";
+  await student.getByRole("textbox", { name: "Your response", exact: true }).fill(explanation);
   await student.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(student.getByText("Draft saved. You can pick up right here later.")).toBeVisible();
   await student.reload();
-  await expect(student.getByLabel("Walk us through your thinking", { exact: false })).toHaveValue(explanation);
+  await expect(student.getByRole("textbox", { name: "Your response", exact: true })).toHaveValue(explanation);
   await student.getByRole("button", { name: "Submit contribution", exact: true }).click();
   await expect(student.getByText("Awaiting human feedback on this revision")).toBeVisible();
   data = await (await student.request.get("/api/data")).json(); const submission = data.submissions.find((s: { task_id: string }) => s.task_id === task.id);
@@ -54,7 +112,7 @@ test("full contribution, revision, credit, application and accepted invitation a
   await expect(lead.getByText("Revision requested. Your feedback is saved.", { exact: true })).toBeVisible();
   await student.reload();
   await student.getByRole("link", { name: "Revise your contribution", exact: false }).click();
-  await student.getByLabel("What would you need to check?", { exact: false }).fill("I would measure the narrowest section of the garden path and compare it to the robot’s required clearance, and check pedestrian traffic before testing.");
+  await student.getByRole("textbox", { name: "Your response", exact: true }).fill(`${explanation} I would compare equipment logs, meter checks, and historical baselines before making a recommendation.`);
   await student.getByRole("button", { name: "Resubmit", exact: true }).click();
   await expect(student.getByRole("heading", { name: "Revision 2", exact: true })).toBeVisible();
   await lead.reload();
@@ -92,7 +150,8 @@ test("full contribution, revision, credit, application and accepted invitation a
 
 test("explore is responsive, searchable, and labels previews", async ({ page }) => {
   await page.goto("/"); await expect(page.getByRole("heading", { name: "Big ideas. Small beginnings." })).toBeVisible();
-  await expect(page.locator(".preview-chip")).toHaveCount(2);
+  const publicData = await (await page.request.get("/api/data")).json();
+  await expect(page.locator(".preview-chip")).toHaveCount(publicData.projects.filter((p: { preview: number; status: string }) => p.preview && p.status === "published").length);
   await page.getByRole("textbox", { name: "Search projects" }).fill("Robot Route Rescue");
   await expect(page.locator(".project-card")).toHaveCount(1);
   await page.getByRole("textbox", { name: "Search projects" }).fill("");
@@ -102,24 +161,116 @@ test("explore is responsive, searchable, and labels previews", async ({ page }) 
   await expect(page.getByRole("link", { name: "My contributions", exact: false })).toBeVisible();
 });
 
-test("optional assistance clearly labels simulation and saves only an unpublished draft", async ({ page, request }) => {
+test("AI-assisted energy demo publishes synthetic materials and accepts a student text contribution", async ({ page, request, browser }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("button", { name: "Try as lead", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.goto("/?view=task-editor&id=robot-route-rescue");
+  await page.goto("/?view=task-editor&id=campus-energy-detective");
+  await expect(page.getByLabel("Task title", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Instructions", { exact: true })).toHaveValue("");
   await page.getByRole("button", { name: "Generate starter task", exact: true }).click();
   await expect(page.getByText("SIMULATED OUTPUT — preset example, not live AI. Review and edit before publication.", { exact: true })).toBeVisible();
   const taskId = new URL(page.url()).searchParams.get("id");
   const data = await (await page.request.get("/api/data")).json();
   const task = data.tasks.find((t: { id: string }) => t.id === taskId);
   expect(task.status).toBe("draft"); expect(task.source).toBe("simulated");
-  expect(task.content.missingInformation).toContain("SIMULATED DRAFT");
+  expect(task.content.format).toBe("written-response");
+  expect(task.content.title).toMatch(/energy/i);
+  expect(task.content.instructions).not.toContain("A small delivery robot");
+  expect(task.content.missingInformation).toBe("");
+  expect(task.content.materialsOrigin).toBe("simulated-synthetic");
+  expect(task.content.materials).toContain("79");
   await page.reload();
   await expect(page.getByText("SIMULATED OUTPUT — preset example, not live AI. Review and edit before publication.", { exact: true })).toBeVisible();
   const publicResponse = await (await request.get("/api/data")).json();
   expect(publicResponse.tasks.some((t: { id: string }) => t.id === taskId)).toBe(false);
-  await page.getByRole("checkbox").check();
+  await expect(page.getByText("Simulated fictional demo data (preset, not live AI)", { exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: /I have reviewed/ }).check();
   await page.getByRole("button", { name: "Approve & publish task", exact: true }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Resolve the missing information field before publishing." })).toBeVisible();
+  await expect(page.getByText("Owner-approved task published.", { exact: true })).toBeVisible();
+  const studentContext = await browser.newContext();
+  const student = await studentContext.newPage();
+  const studentName = `Energy Demo Student ${Date.now()}`;
+  await register(student, studentName, `energy-${Date.now()}@example.test`);
+  await student.goto(`/?view=workspace&id=${taskId}`);
+  await expect(student.getByText("Simulated fictional demo data (preset, not live AI)", { exact: true })).toBeVisible();
+  await expect(student.locator(".task-materials")).toContainText("79");
+  await expect(student.getByRole("radio")).toHaveCount(0);
+  await student.getByRole("textbox", { name: "Your response", exact: true }).fill("The 20:00 power reading of 79 kW stands out because it is higher than the 46 kW midday reading despite the building being closed. I would investigate equipment schedules and meter accuracy rather than assume the cause.");
+  await student.getByRole("button", { name: "Submit contribution", exact: true }).click();
+  await expect(student.getByText("Awaiting human feedback on this revision")).toBeVisible();
+  const submissionId = new URL(student.url()).searchParams.get("id");
+  await page.goto(`/?view=review&id=${submissionId}`);
+  await page.getByLabel("Feedback on revision 1", { exact: true }).fill("Good use of units and careful distinction between an unusual reading and an explanation. Approved!");
+  await page.getByRole("button", { name: "Approve contribution", exact: true }).click();
+  await expect(page.getByText("Contribution approved and credited in the shared artifact.")).toBeVisible();
+  await student.reload();
+  await expect(student.getByRole("heading", { name: "You helped build that." })).toBeVisible();
+  await student.goto("/?view=project&id=campus-energy-detective");
+  await expect(student.getByText(`Contributed by ${studentName}`, { exact: false })).toBeVisible();
+  const publicApproved = await (await request.get("/api/data")).json();
+  expect(publicApproved.artifacts.find((a: { id: string }) => a.id === submissionId).content.materialsOrigin).toBe("simulated-synthetic");
+  expect(publicApproved.submissions).toEqual([]);
+  await studentContext.close();
+});
+
+test("generated task fills every editor field, persists, and rejects invalid responses without losing edits", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "Try as lead", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.goto("/?view=task-editor&id=campus-energy-detective");
+  const content = energyTask;
+  await page.route("**/api/generate", route => {
+    expect(route.request().postDataJSON().format).toBe("written-response");
+    return route.fulfill({ json: { simulated: false, content } });
+  });
+  await page.getByRole("button", { name: "Generate starter task", exact: true }).click();
+  await expect(page).not.toHaveURL(/id=campus-energy-detective$/);
+  await expect(page.getByLabel("Task title", { exact: true })).toHaveValue(content.title);
+  await expect(page.getByLabel("Instructions", { exact: true })).toHaveValue(content.instructions);
+  await expect(page.getByLabel("Human review criteria", { exact: true })).toHaveValue(content.criteria);
+  const taskId = new URL(page.url()).searchParams.get("id");
+  const saved = (await (await page.request.get("/api/data")).json()).tasks.find((task: { id: string }) => task.id === taskId);
+  expect(saved.content).toEqual(content); expect(saved.source).toBe("ai"); expect(saved.status).toBe("draft");
+  await page.reload();
+  await expect(page.getByLabel("Task title", { exact: true })).toHaveValue(content.title);
+  await page.getByLabel("Task title", { exact: true }).fill("My unsaved energy task edits");
+  await page.unroute("**/api/generate");
+  await page.route("**/api/generate", route => route.fulfill({ json: { simulated: false, content: { title: "Invalid draft" } } }));
+  await page.getByRole("button", { name: "Generate starter task", exact: true }).click();
+  await expect(page.getByText("AI returned an incomplete or unsupported draft. Your editor is unchanged; try again or continue manually.")).toBeVisible();
+  await expect(page.getByLabel("Task title", { exact: true })).toHaveValue("My unsaved energy task edits");
+  const unchanged = (await (await page.request.get("/api/data")).json()).tasks.find((task: { id: string }) => task.id === taskId);
+  expect(unchanged.content).toEqual(content);
+});
+
+test("the predefined robot task preserves its interactive map and route submissions", async ({ page, browser }) => {
+  await register(page, "Robot Demo Student", `robot-${Date.now()}@example.test`);
+  await page.goto("/?view=workspace&id=robot-first-route");
+  await expect(page.getByRole("heading", { name: "Find a better way across campus", exact: true })).toBeVisible();
+  await expect(page.locator(".route-map")).toBeVisible();
+  await page.getByRole("radio", { name: "B", exact: false }).check();
+  const explanation = "I recommend the garden loop because it avoids the known stairs and construction. The longer distance is a reasonable trade-off, but I would verify path conditions before testing.";
+  await page.getByLabel("Walk us through your thinking", { exact: true }).fill(explanation);
+  await page.getByLabel("What would you need to check?", { exact: true }).fill("I would measure path width and check pedestrian traffic before a test.");
+  await page.getByRole("button", { name: "Save draft", exact: true }).click();
+  await expect(page.getByText("Draft saved. You can pick up right here later.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "B", exact: false })).toBeChecked();
+  await expect(page.getByLabel("Walk us through your thinking", { exact: true })).toHaveValue(explanation);
+  await page.getByRole("button", { name: "Submit contribution", exact: true }).click();
+  await expect(page.getByText("Proposed route B", { exact: true })).toBeVisible();
+  const id = new URL(page.url()).searchParams.get("id");
+  const context = await browser.newContext(); const lead = await context.newPage();
+  await lead.goto("/"); await lead.getByRole("button", { name: "Sign in", exact: true }).click();
+  await lead.getByRole("button", { name: "Try as lead", exact: true }).click();
+  await expect(lead.getByRole("dialog")).toHaveCount(0);
+  await lead.goto(`/?view=review&id=${id}`);
+  await expect(lead.locator(".route-map")).toBeVisible();
+  await lead.getByLabel("Feedback on revision 1", { exact: true }).fill("Good route comparison and sensible checks for uncertainty. Approved for the demo notebook.");
+  await lead.getByRole("button", { name: "Approve contribution", exact: true }).click();
+  await expect(lead.getByText("Contribution approved and credited in the shared artifact.")).toBeVisible();
+  await context.close();
 });

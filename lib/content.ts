@@ -12,5 +12,20 @@ export const routeTask = {
   format: "route-selection" as const,
 };
 
-export type TaskContent = typeof routeTask;
-export type Answers = { route: string; explanation: string; missing: string };
+export type TaskFormat = "route-selection" | "written-response" | "planning-only";
+export type MaterialsOrigin = "provided" | "ai-synthetic" | "simulated-synthetic";
+export type TaskContent = Omit<typeof routeTask, "format"> & { format: TaskFormat; materialsOrigin?: MaterialsOrigin };
+export function emptyTask(format: TaskFormat = "written-response"): TaskContent {
+  return { title: "", learningGoal: "", prerequisites: "", duration: "", instructions: "", materials: "", deliverable: "", criteria: "", hints: "", missingInformation: "", format };
+}
+export type RouteAnswers = { route: string; explanation: string; missing: string };
+export type TextAnswers = { response: string };
+export type Answers = RouteAnswers | TextAnswers;
+
+export function materialsLabel(origin?: MaterialsOrigin) {
+  return origin === "ai-synthetic" ? "AI-generated fictional demo data" : origin === "simulated-synthetic" ? "Simulated fictional demo data (preset, not live AI)" : "";
+}
+export function labelSyntheticMaterials(content: TaskContent): TaskContent {
+  const label = materialsLabel(content.materialsOrigin);
+  return label && !content.materials.startsWith(label) ? { ...content, materials: `${label}\n\n${content.materials}` } : content;
+}

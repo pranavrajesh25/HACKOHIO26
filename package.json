@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/service.test.mts",
+    "test": "tsx --test tests/*.test.mts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
