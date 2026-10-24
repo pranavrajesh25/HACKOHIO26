@@ -12,6 +12,7 @@ import TextWorkspace from "./text-workspace";
 import ProjectVoice from "./project-voice";
 import ResumeImport from "./resume-import";
 import QuickTasks from "./quick-tasks";
+import TaskRecommendations from "./task-recommendations";
 import { mergeInterests } from "@/lib/resume-schema";
 import { AnswerDisplay, ArtifactCard, MaterialNotice, TaskMaterials } from "./task-content";
 
@@ -120,6 +121,7 @@ function Explore({ data, search, setSearch }: { data: Data; search: string; setS
   const projects = data.projects.filter(p => p.status === "published" && `${p.title} ${p.topic} ${p.disciplines}`.toLowerCase().includes(search.toLowerCase()) && (filter === "All projects" || p.topic === filter || (filter === "Beginner friendly" && !p.preview)));
   return <>
     <PageTitle eyebrow="YOUR CURIOSITY BELONGS HERE" title="Big ideas. Small beginnings." description="Explore a project. Try a small task. See where it takes you." />
+    <TaskRecommendations key={`${data.user?.id}-${data.user?.interests}`} data={data} />
     <section className="hero"><div className="hero-copy"><span className="hero-kicker"><span /> NO APPLICATION. JUST A LITTLE CURIOSITY.</span><h2>You don’t have to join a team<br className="desktop-break" /> to be part of something.</h2><p>Try a bite-sized task, get feedback from a real person,<br className="desktop-break" /> and make your first contribution. The rest can come later.</p><Link href={url("project", "robot-route-rescue")} className="button dark">Find your first task <ArrowRight size={16} /></Link><span className="hero-footnote"><CheckCircle2 size={13} /> Beginner-friendly. Pressure-free. Actually meaningful.</span></div><RobotArt /><span className="hero-art-caption"><span /> A small robot. A big adventure.</span></section>
     <section className="how-strip"><div className="how-intro">A little effort.<br /><strong>A real way in.</strong></div>{[{ icon: Compass, title: "Find your spark", desc: "A problem you care about" }, { icon: Lightbulb, title: "Give it a test drive", desc: "One small, guided task" }, { icon: HeartHandshake, title: "Build from there", desc: "Feedback, credit & maybe a team" }].map((s, i) => <div className="how-step" key={s.title}><span className={`how-icon how-${i}`}><s.icon size={20} /></span><div><h3>{s.title}</h3><p>{s.desc}</p></div>{i < 2 && <ChevronRight size={16} className="how-arrow" />}</div>)}</section>
     <section className="explore-section"><div className="section-heading"><div><h2>Find something worth trying <span className="title-count">{data.projects.filter(p => p.status === "published").length}</span></h2><p>Different interests. Different starting points. All welcome.</p></div><label className="search-box"><Search size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects…" aria-label="Search projects" /><kbd>⌕</kbd></label></div>

@@ -77,6 +77,12 @@ Review 5–10 grounded keyword suggestions, edit/remove any, then **Merge sugges
 
 The application does not store or log the PDF or extracted text, and does not log provider responses. Only reviewed interests are saved through the existing profile workflow. The PDF is sent to OpenRouter and its model provider, whose retention policies apply. Requests validate actual streamed size and the PDF signature server-side; file-picker restrictions alone are not trusted. No database migration is required.
 
+### Personalized task recommendations
+
+On Explore, signed-in students can select **Find tasks for me** to rank up to three existing tasks against their saved profile interests. The action discloses external processing: only interests and bounded public task/project details go to OpenRouter, not names, emails, résumé files, or submission answers. Interests are learning preferences, not verified qualifications. Recommendations never generate tasks or change profiles.
+
+Only published tasks in published projects accepting work are eligible; tasks already started by the student or assigned to them for review are excluded. Saved drafts and requested revisions appear separately under **Continue your work**. The server shortlists at most 40 candidates, validates model IDs and explanations, and rechecks availability after inference. Requests share the five-per-minute AI budget. Missing keys, provider errors, or invalid output use clearly labeled keyword **Interest matches**, never simulated AI. Weak or absent matches can return no results. No embeddings, persistent recommendation history, or new schema are required.
+
 ### Synthetic demo materials
 
 The lead may allow AI to synthesize small datasets, short source passages, or scenarios to make a self-contained demo task. It must not invent real partnerships, people, reviewer availability, or claim that fictional measurements are real.
@@ -132,4 +138,4 @@ Deploy **one Node.js instance with a persistent writable volume**. Do not put SQ
 
 Set `DATABASE_PATH` to the persistent volume, `BETTER_AUTH_URL` to the public origin, and a strong `BETTER_AUTH_SECRET` before production build/start. Demo sign-in works in development regardless of `ENABLE_DEMO_AUTH`; in production it requires `ENABLE_DEMO_AUTH=true`. Disabling it does not revoke existing sessions or old passwords in a reused demo database. Use separate demo and private-production databases.
 
-Remaining prototype limits: no email verification/password-reset delivery setup, reviewer invitation/promotion workflow, team roster-management screen, task-material/submission uploads, automated migration CLI, notifications, chat, feeds, ranking, recommendations, or external repository integrations. Résumé PDFs are accepted only for transient profile-interest analysis. Updates are fetched after mutations, on reload, and when the window regains focus rather than pushed live. Newly created projects default to their creator as reviewer; reviewer selection is restricted to existing project leads/reviewers.
+Remaining prototype limits: no email verification/password-reset delivery setup, reviewer invitation/promotion workflow, team roster-management screen, task-material/submission uploads, automated migration CLI, notifications, chat, feeds, or external repository integrations. Résumé PDFs are accepted only for transient profile-interest analysis. Updates are fetched after mutations, on reload, and when the window regains focus rather than pushed live. Newly created projects default to their creator as reviewer; reviewer selection is restricted to existing project leads/reviewers.
