@@ -33,7 +33,7 @@ Use **Sign in → Try as student** and **Try as lead** in separate browser profi
 
 ## Voice-to-project drafts
 
-On **Create a project**, record a browser microphone description (around 30 seconds; automatically stopped at 60), play it back, and select **Generate project draft from recording**. HTTPS or localhost and microphone permission are required. Browser recordings are converted locally to 16 kHz mono WAV before being sent to OpenRouter's speech-to-text API using `openai/whisper-large-v3-turbo` (override with `OPENROUTER_TRANSCRIPTION_MODEL`). The existing `OPENROUTER_MODEL` then turns the transcript into validated, editable project fields.
+On **Create a project**, record a browser microphone description (around 30 seconds; automatically stopped at 60), play it back, and select **Generate project draft from recording**. HTTPS or localhost and microphone permission are required. Browser recordings are converted locally to 16 kHz mono WAV before being sent to OpenRouter's speech-to-text API using `openai/whisper-large-v3-turbo`. Haiku 5.5 then turns the transcript into validated, editable project fields.
 
 Voice assistance requires `OPENROUTER_API_KEY`; there is no simulated transcription. You may also type/edit the transcript and generate from text, including retrying after a drafting failure. Inferred details are marked as suggestions; real partnerships, people, resources, and availability must not be invented. Existing form edits require confirmation before replacement. Contributor acceptance settings are never AI-controlled. Generation neither saves nor publishes: review all fields, save a private draft, and explicitly publish separately.
 
@@ -51,14 +51,23 @@ Text submissions require at least 60 characters and 12 words; incomplete drafts 
 
 ## Optional OpenRouter assistance
 
-Set these **server-only** environment variables:
+Set this **server-only** environment variable:
 
 ```dotenv
 OPENROUTER_API_KEY=your-key-here
-OPENROUTER_MODEL=openai/gpt-4o-mini
 ```
 
-The generator uses the selected project’s title, problem, goal, project brief, materials, beginner level, and target duration. It creates complete editable text-task drafts, not robot exercises for unrelated projects. Live calls time out after 25 seconds and are limited to five per user per minute. Invalid responses leave existing editor content unchanged. Manual authoring works without AI.
+Models are hardcoded in `lib/openrouter.ts`: `anthropic/claude-haiku-5.5` for every text/PDF call and `openai/whisper-large-v3-turbo` for transcription. The old `OPENROUTER_MODEL` and `OPENROUTER_TRANSCRIPTION_MODEL` environment variables are no longer read. Every request includes `X-Title: Project Test Drive` for OpenRouter app attribution. Task generation, voice drafting, and résumé imports share a persistent budget of five assisted requests per user per minute (voice transcription + drafting counts as one workflow).
+
+The generator uses the selected project’s title, problem, goal, project brief, materials, beginner level, and target duration. It creates complete editable text-task drafts, not robot exercises for unrelated projects. Live task calls time out after 25 seconds; voice calls after 45 seconds per stage; résumé calls after 60 seconds. Invalid responses leave existing editor content unchanged. Manual authoring works without AI.
+
+### Résumé-to-interests import
+
+On **Your profile**, choose a CV/résumé PDF (up to 5 MB), consent to external processing, and select **Suggest interests from PDF**. The authenticated server sends it as a base64 PDF attachment to Haiku using OpenRouter's native PDF parser, without a local extraction library or separate OCR service. Native vision can handle clear scanned pages, but unreadable, encrypted, overly long PDFs, or documents with insufficient evidence may fail. Manual interest editing always remains available; no-key imports are not simulated.
+
+Review 5–10 grounded keyword suggestions, edit/remove any, then **Merge suggestions into interests**. Merging preserves current interests, deduplicates case-insensitively, and respects the profile's 1000-character limit without truncation. You must still select **Save profile** to persist changes. Failures never change saved interests. Suggestions are possible learning interests, not verified skills; the prompt prohibits invented interests, sensitive-trait inference, identifying details, and instructions embedded in the document.
+
+The application does not store or log the PDF or extracted text, and does not log provider responses. Only reviewed interests are saved through the existing profile workflow. The PDF is sent to OpenRouter and its model provider, whose retention policies apply. Requests validate actual streamed size and the PDF signature server-side; file-picker restrictions alone are not trusted. No database migration is required.
 
 ### Synthetic demo materials
 
@@ -107,7 +116,7 @@ npm run test:e2e
 npm run build
 ```
 
-Database tests run in memory. Browser tests use independent student/lead sessions, an isolated server on :3100, and `data/test-drive.e2e.sqlite`. They exercise manual text authoring/publication, AI-assisted synthetic energy-task publication, saved-draft persistence, text feedback/revision/approval, public credit, applications/invitations/acceptance, provenance, malformed-provider responses, and the original robot map/submission/review flow.
+Database tests run in memory. Browser tests use independent student/lead sessions, an isolated server on :3100, and `data/test-drive.e2e.sqlite`. They exercise résumé consent/review/edit/merge/save and failure handling, voice project drafting, manual text authoring/publication, AI-assisted synthetic energy-task publication, saved-draft persistence, text feedback/revision/approval, public credit, applications/invitations/acceptance, provenance, malformed-provider responses, and the original robot map/submission/review flow. Provider calls are mocked in automated tests; unit/integration tests also check authentication, shared rate limits, streamed size enforcement, hardcoded model selection, and app-name headers.
 
 ## Deployment and limitations
 
@@ -115,4 +124,4 @@ Deploy **one Node.js instance with a persistent writable volume**. Do not put SQ
 
 Set `DATABASE_PATH` to the persistent volume, `BETTER_AUTH_URL` to the public origin, and a strong `BETTER_AUTH_SECRET` before production build/start. Demo sign-in works in development regardless of `ENABLE_DEMO_AUTH`; in production it requires `ENABLE_DEMO_AUTH=true`. Disabling it does not revoke existing sessions or old passwords in a reused demo database. Use separate demo and private-production databases.
 
-Remaining prototype limits: no email verification/password-reset delivery setup, reviewer invitation/promotion workflow, team roster-management screen, custom uploads, automated migration CLI, notifications, chat, feeds, ranking, recommendations, or external repository integrations. Updates are fetched after mutations, on reload, and when the window regains focus rather than pushed live. Newly created projects default to their creator as reviewer; reviewer selection is restricted to existing project leads/reviewers.
+Remaining prototype limits: no email verification/password-reset delivery setup, reviewer invitation/promotion workflow, team roster-management screen, task-material/submission uploads, automated migration CLI, notifications, chat, feeds, ranking, recommendations, or external repository integrations. Résumé PDFs are accepted only for transient profile-interest analysis. Updates are fetched after mutations, on reload, and when the window regains focus rather than pushed live. Newly created projects default to their creator as reviewer; reviewer selection is restricted to existing project leads/reviewers.

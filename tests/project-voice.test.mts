@@ -17,6 +17,7 @@ test("voice input enforces real PCM duration and canonical WAV structure", () =>
 test("transcription uses the requested OpenRouter model and base64 WAV API", async () => {
   const result = await transcribeProject(wav(), { apiKey: "test", fetchImpl: async (url, options) => {
     assert.equal(url, "https://openrouter.ai/api/v1/audio/transcriptions");
+    assert.equal((options?.headers as Record<string, string>)["X-Title"], "Project Test Drive");
     const body = JSON.parse(String(options?.body));
     assert.equal(body.model, "openai/whisper-large-v3-turbo"); assert.equal(body.input_audio.format, "wav");
     assert.deepEqual(Buffer.from(body.input_audio.data, "base64"), wav());
@@ -27,7 +28,8 @@ test("transcription uses the requested OpenRouter model and base64 WAV API", asy
 test("project generation validates all form fields and marks synthesized suggestions", async () => {
   const result = await draftProject("Start a campus garden project for students.", { apiKey: "test", fetchImpl: async (url, options) => {
     assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
-    const body = JSON.parse(String(options?.body)); assert.match(body.messages[0].content, /Never invent real people/);
+    assert.equal((options?.headers as Record<string, string>)["X-Title"], "Project Test Drive");
+    const body = JSON.parse(String(options?.body)); assert.equal(body.model, "anthropic/claude-haiku-5.5"); assert.match(body.messages[0].content, /Never invent real people/);
     assert.equal(JSON.parse(body.messages[1].content).transcript, "Start a campus garden project for students.");
     return Response.json({ choices: [{ message: { content: JSON.stringify({ fields, suggestedFields: ["duration", "materials"] }) } }] });
   } });

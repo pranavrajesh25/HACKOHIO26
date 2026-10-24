@@ -2,6 +2,68 @@ import { test, expect, type Page } from "@playwright/test";
 import { type TaskContent } from "../../lib/content";
 import { energyTask } from "../fixtures/energy-task";
 
+test("résumé suggestions are reviewed, edited, merged, and saved explicitly", async ({ page }) => {
+  await register(page, "Résumé Student", `resume-${Date.now()}@example.test`);
+  await page.goto("/?view=profile");
+  await page.getByLabel("Interests", { exact: true }).fill("Python, Music");
+  await page.getByRole("button", { name: "Save profile", exact: true }).click();
+  await expect(page.getByText("Profile updated.", { exact: true })).toBeVisible();
+  const importer = page.getByRole("region", { name: "Import interests from résumé" });
+  let calls = 0;
+  await page.route("**/api/resume-interests", async route => {
+    calls++; expect(route.request().headers()["content-type"]).toBe("application/pdf");
+    expect(route.request().postDataBuffer()!.toString().startsWith("%PDF-")).toBe(true);
+    await route.fulfill({ json: { interests: ["python", "Data analysis", "Robotics", "Design", "Sustainability"] } });
+  });
+  await importer.getByLabel("CV or résumé PDF").setInputFiles({ name: "resume.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\nFictional résumé\n%%EOF") });
+  await expect(importer.getByRole("button", { name: "Suggest interests from PDF" })).toBeDisabled();
+  expect(calls).toBe(0);
+  await importer.getByRole("checkbox").check();
+  await importer.getByRole("button", { name: "Suggest interests from PDF" }).click();
+  await expect(importer.getByLabel("Suggested interest 1", { exact: true })).toHaveValue("python");
+  await expect(page.getByLabel("Interests", { exact: true })).toHaveValue("Python, Music");
+  expect((await (await page.request.get("/api/data")).json()).user.interests).toBe("Python, Music");
+  await importer.getByLabel("Suggested interest 2", { exact: true }).fill("Data visualization");
+  await importer.getByRole("button", { name: "Remove suggested interest 5", exact: true }).click();
+  // Include manual edits made after analysis, not just the profile at upload time.
+  await page.getByLabel("Interests", { exact: true }).fill("Python, Music, Writing");
+  await importer.getByRole("button", { name: "Merge suggestions into interests" }).click();
+  const merged = "Python, Music, Writing, Data visualization, Robotics, Design";
+  await expect(page.getByLabel("Interests", { exact: true })).toHaveValue(merged);
+  expect((await (await page.request.get("/api/data")).json()).user.interests).toBe("Python, Music");
+  await page.getByRole("button", { name: "Save profile", exact: true }).click();
+  await expect(page.getByText("Profile updated.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save profile", exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(page.getByLabel("Interests", { exact: true })).toHaveValue(merged);
+  expect(calls).toBe(1);
+});
+
+test("résumé import handles oversized PDFs, invalid AI responses, and provider failures without changing interests", async ({ page, request }) => {
+  expect((await request.post("/api/resume-interests", { headers: { "Content-Type": "application/pdf" }, data: "%PDF-1.4\n%%EOF" })).status()).toBe(401);
+  await register(page, "Résumé Error Student", `resume-error-${Date.now()}@example.test`);
+  await page.goto("/?view=profile");
+  const importer = page.getByRole("region", { name: "Import interests from résumé" });
+  await page.getByLabel("Interests", { exact: true }).fill("Keep my interests");
+  await importer.getByLabel("CV or résumé PDF").setInputFiles({ name: "large.pdf", mimeType: "application/pdf", buffer: Buffer.alloc(5 * 1024 * 1024 + 1) });
+  await expect(importer.getByRole("alert")).toContainText("5 MB");
+  let calls = 0;
+  await page.route("**/api/resume-interests", route => {
+    calls++;
+    return route.fulfill(calls === 1 ? { json: { interests: [] } } : { status: 502, json: { error: "Could not analyze this résumé. Your profile is unchanged." } });
+  });
+  await importer.getByLabel("CV or résumé PDF").setInputFiles({ name: "resume.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF") });
+  await importer.getByRole("checkbox").check();
+  await importer.getByRole("button", { name: "Suggest interests from PDF" }).click();
+  await expect(importer.getByRole("alert")).toBeVisible();
+  await expect(page.getByLabel("Interests", { exact: true })).toHaveValue("Keep my interests");
+  await expect(importer.getByRole("button", { name: "Merge suggestions into interests" })).toHaveCount(0);
+  await importer.getByRole("button", { name: "Suggest interests from PDF" }).click();
+  await expect(importer.getByRole("alert")).toContainText("Could not analyze");
+  await expect(page.getByLabel("Interests", { exact: true })).toHaveValue("Keep my interests");
+  expect((await (await page.request.get("/api/data")).json()).user.interests).toBe("");
+});
+
 test("voice project drafting records audio, fills editable fields, and preserves edits on failure or cancellation", async ({ page }) => {
   await register(page, "Voice Lead", `voice-${Date.now()}@example.test`);
   await page.goto("/?view=editor");

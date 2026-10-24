@@ -23,12 +23,13 @@ test("offline demo generation produces a complete publishable energy task with l
   assert.doesNotMatch(result.content.instructions, /route|robot/i);
 });
 test("live generation sends project context, permits synthesis, and preserves generated material with provenance", async () => {
-  const result = await generateStarterTask(input, project, { apiKey: "test-key", model: "test/model", fetchImpl: async (url, options) => {
+  const result = await generateStarterTask(input, project, { apiKey: "test-key", fetchImpl: async (url, options) => {
     assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
     assert.equal((options?.headers as Record<string, string>).Authorization, "Bearer test-key");
+    assert.equal((options?.headers as Record<string, string>)["X-Title"], "Project Test Drive");
     const body = JSON.parse(String(options?.body));
     assert.match(body.messages[0].content, /MAY synthesize/);
-    assert.equal(body.model, "test/model");
+    assert.equal(body.model, "anthropic/claude-haiku-5.5");
     const supplied = JSON.parse(body.messages[1].content);
     assert.deepEqual(supplied.projectContext, project);
     assert.equal(supplied.format, "written-response");

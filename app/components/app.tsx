@@ -10,6 +10,8 @@ import { emptyTask, type RouteAnswers, type TaskContent } from "@/lib/content";
 import { generatedTaskSchema } from "@/lib/task-schema";
 import TextWorkspace from "./text-workspace";
 import ProjectVoice from "./project-voice";
+import ResumeImport from "./resume-import";
+import { mergeInterests } from "@/lib/resume-schema";
 import { AnswerDisplay, ArtifactCard, MaterialNotice, TaskMaterials } from "./task-content";
 
 const url = (view: string, id?: string) => `/?view=${view}${id ? `&id=${encodeURIComponent(id)}` : ""}`;
@@ -320,7 +322,9 @@ function ApplicantDashboard({ data, action, busy }: { data: Data } & Actions) {
 }
 function Profile({ data, action, busy }: { data: Data } & Actions) {
   const [name, setName] = useState(data.user?.name || ""); const [interests, setInterests] = useState(data.user?.interests || "");
-  return <><PageTitle eyebrow="BRING YOUR OWN PERSPECTIVE" title="Your profile" description="A name and a little curiosity. That’s a good place to start." /><form className="panel form-panel narrow-form" onSubmit={e => { e.preventDefault(); action("profile", "", { name, interests }, "Profile updated."); }}><Field label="Display name"><input required minLength={2} maxLength={100} value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Interests"><textarea rows={4} maxLength={1000} value={interests} onChange={e => setInterests(e.target.value)} /></Field><p className="small-print">Email: {data.user?.email}. Credentials are managed by Better Auth, not your profile.</p><button className="button" disabled={busy}>Save profile <Check size={15} /></button></form></>;
+  return <><PageTitle eyebrow="BRING YOUR OWN PERSPECTIVE" title="Your profile" description="A name and a little curiosity. That’s a good place to start." />
+    <ResumeImport disabled={busy} onApply={values => setInterests(mergeInterests(interests, values))} />
+    <form className="panel form-panel narrow-form" onSubmit={e => { e.preventDefault(); action("profile", "", { name, interests }, "Profile updated."); }}><Field label="Display name"><input required minLength={2} maxLength={100} value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Interests"><textarea rows={4} maxLength={1000} value={interests} onChange={e => setInterests(e.target.value)} /></Field><p className="small-print">Email: {data.user?.email}. Credentials are managed by Better Auth, not your profile.</p><button className="button" disabled={busy}>Save profile <Check size={15} /></button></form></>;
 }
 
 function AuthModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => Promise<void> }) {
