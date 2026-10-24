@@ -1,6 +1,6 @@
 "use client";
 
-import { cloneElement, useCallback, useEffect, useId, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
+import { cloneElement, useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactElement, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, ArrowUpRight, ArrowLeft, Search, Compass, Layers3, Users, LayoutDashboard, Plus, Clock3, ChevronDown, ChevronRight, Check, CheckCircle2, Circle, Sparkles, X, Leaf, Bot, Lightbulb, BookOpen, GraduationCap, LogOut, Menu, Flag, HeartHandshake, Save, Send, AlertCircle, Loader2, Pencil } from "lucide-react";
@@ -39,6 +39,8 @@ export default function TestDrive() {
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const [mobile, setMobile] = useState(false);
+  const mobileMenuRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const [search, setSearch] = useState("");
   const refresh = useCallback(async () => {
     const response = await fetch("/api/data", { cache: "no-store" });
@@ -49,6 +51,17 @@ export default function TestDrive() {
   useEffect(() => { const onFocus = () => { refresh().catch(() => {}); }; window.addEventListener("focus", onFocus); return () => window.removeEventListener("focus", onFocus); }, [refresh]);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(""), 5000); return () => clearTimeout(t); }, [toast]);
   useEffect(() => { setError(""); setMobile(false); }, [view, id]);
+  useEffect(() => {
+    if (!mobile) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setMobile(false); mobileMenuRef.current?.focus(); }
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    mobileCloseRef.current?.focus();
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", onKeyDown); };
+  }, [mobile]);
   async function action(action: string, record: string, payload?: unknown, message = "Saved") {
     if (!data?.user) { setAuthOpen(true); return null; }
     setBusy(true); setError("");
@@ -71,28 +84,28 @@ export default function TestDrive() {
   const leadView = ["lead", "editor", "task-editor", "review", "applicants"].includes(view);
 
   return <div className="app-shell">
-    {mobile && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMobile(false)} />}
-    <aside className={`sidebar ${mobile ? "is-open" : ""}`}>
-      <Link href="/" className="brand"><span className="brand-mark"><Flag size={21} strokeWidth={2.3} /></span><span>test drive<span className="brand-dot">.</span></span></Link>
+    {mobile && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => { setMobile(false); mobileMenuRef.current?.focus(); }} />}
+    <aside className={`sidebar ${mobile ? "is-open" : ""}`} id="primary-navigation" aria-label="Main navigation">
+      <div className="sidebar-header"><Link href="/" className="brand"><span className="brand-mark"><Flag size={21} strokeWidth={2.3} /></span><span>test drive<span className="brand-dot">.</span></span></Link>{mobile && <button ref={mobileCloseRef} className="icon-button sidebar-close" aria-label="Close navigation" onClick={() => { setMobile(false); mobileMenuRef.current?.focus(); }}><X size={20} /></button>}</div>
       <div className="workspace-label">A LITTLE CURIOSITY. A REAL CONTRIBUTION.</div>
       <div className="nav-label">YOUR WORKSPACE</div>
-      <nav>{nav.map(n => <Link key={n.view} href={url(n.view)} className={`nav-item ${view === n.view || (n.view === "explore" && ["project", "workspace"].includes(view)) ? "selected" : ""}`}><n.icon size={19} /><span>{n.label}</span>{!!n.count && <span className="nav-count">{n.count}</span>}</Link>)}</nav>
+      <nav>{nav.map(n => <Link key={n.view} href={url(n.view)} aria-current={view === n.view || (n.view === "explore" && ["project", "workspace"].includes(view)) ? "page" : undefined} className={`nav-item ${view === n.view || (n.view === "explore" && ["project", "workspace"].includes(view)) ? "selected" : ""}`}><n.icon size={19} /><span>{n.label}</span>{!!n.count && <span className="nav-count">{n.count}</span>}</Link>)}</nav>
       <div className="nav-divider" />
       <div className="nav-label">BUILD SOMETHING TOGETHER</div>
-      <Link href={url("lead")} className={`nav-item ${leadView ? "selected" : ""}`}><LayoutDashboard size={18} /><span>Project lead space</span>{reviewCount > 0 && <span className="nav-count">{reviewCount}</span>}</Link>
+      <Link href={url("lead")} aria-current={leadView ? "page" : undefined} className={`nav-item ${leadView ? "selected" : ""}`}><LayoutDashboard size={18} /><span>Project lead space</span>{reviewCount > 0 && <span className="nav-count">{reviewCount}</span>}</Link>
       <div className="sidebar-bottom"><div className="sidebar-note"><span className="little-star">✧</span><h4>You don’t need to have<br />it all figured out.</h4><p>Start small. Learn by doing.<br />Find your people along the way.</p><Link href={url("explore")}>Find your first task <ArrowRight size={14} /></Link></div>
         <div className="demo-note"><span className="demo-dot" /> Hackathon demo <span title="All projects, people, and mentor roles are fictional.">ⓘ</span></div>
         <button className="profile-button" onClick={() => user ? navigate("profile") : setAuthOpen(true)}><span className="avatar">{user ? user.name.split(" ").map(n => n[0]).slice(0, 2).join("") : "Y"}</span><span><strong>{user?.name || "Your next chapter"}</strong><small>{user ? "Student workspace" : "Sign in to get started"}</small></span><ChevronDown size={15} /></button>
       </div>
     </aside>
-    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-button mobile-menu" onClick={() => setMobile(true)} aria-label="Open navigation"><Menu size={20} /></button><span>Workspace</span><ChevronRight size={14} /><strong>{leadView ? "Project lead space" : view === "explore" || view === "project" ? "Explore projects" : view === "workspace" ? "Task workspace" : view === "contribution" ? "My contributions" : view === "profile" ? "My profile" : view === "applications" ? "My teams" : "My contributions"}</strong></div><div className="topbar-right"><span className="demo-pill">DEMO EXPERIENCE</span>{user ? <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await fetch("/api/auth/sign-out", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); await refresh(); navigate("explore"); setToast("Signed out. Your saved work is safe."); }}><LogOut size={17} /></button> : <button className="text-button" onClick={() => setAuthOpen(true)}>Sign in <ArrowUpRight size={15} /></button>}</div></header>
+    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button ref={mobileMenuRef} className="icon-button mobile-menu" onClick={() => setMobile(true)} aria-label="Open navigation" aria-expanded={mobile} aria-controls="primary-navigation"><Menu size={20} /></button><span>Workspace</span><ChevronRight size={14} /><strong>{leadView ? "Project lead space" : view === "explore" || view === "project" ? "Explore projects" : view === "workspace" ? "Task workspace" : view === "contribution" ? "My contributions" : view === "profile" ? "My profile" : view === "applications" ? "My teams" : "My contributions"}</strong></div><div className="topbar-right"><span className="demo-pill">DEMO EXPERIENCE</span>{user ? <button className="icon-button" aria-label="Sign out" title="Sign out" onClick={async () => { await fetch("/api/auth/sign-out", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); await refresh(); navigate("explore"); setToast("Signed out. Your saved work is safe."); }}><LogOut size={17} /></button> : <button className="text-button" onClick={() => setAuthOpen(true)}>Sign in <ArrowUpRight size={15} /></button>}</div></header>
       <main className="main-content">
         {error && <div className="error-banner" role="alert"><AlertCircle size={18} /><span>{error}</span><button className="icon-button" onClick={() => setError("")} aria-label="Dismiss error"><X size={16} /></button></div>}
         {!data ? <div className="loading-state">{loadError ? <><AlertCircle size={28} /><p>{loadError}</p><button className="button" onClick={() => refresh().catch(e => setLoadError(e.message))}>Try again</button></> : <><Loader2 className="spin" size={28} /><p>Finding your next small beginning…</p></>}</div> : <>
           {view === "explore" && <Explore data={data} search={search} setSearch={setSearch} />}
           {view === "project" && (project ? <ProjectPage project={project} data={data} /> : <Empty title="Project not found">This project may be private or no longer available. <Link href="/">Explore projects</Link></Empty>)}
           {view === "workspace" && (task ? <Workspace key={`${task.id}-${user?.id}`} task={task} data={data} action={action} busy={busy} signIn={() => setAuthOpen(true)} navigate={navigate} /> : <Empty title="Task not available">Return to a project to choose an available task.</Empty>)}
-          {view === "contributions" && <><PageTitle eyebrow="LITTLE STEPS, REAL IMPACT" title="My contributions" description="Every thoughtful attempt is a step forward. Your work lives here." />{!user ? <SignInPrompt onClick={() => setAuthOpen(true)} /> : ownSubmissions.length ? <div className="list-panel">{ownSubmissions.map(s => <Link className="submission-row" href={url(s.status === "draft" ? "workspace" : "contribution", s.status === "draft" ? s.task_id : s.id)} key={s.id}><span className="task-icon"><Bot size={23} /></span><div><small>{s.project_title}</small><h3>{s.content.title}</h3><p>{s.current_revision ? `Revision ${s.current_revision}` : "Your draft is saved"} · Task version {s.task_version}</p></div><Badge status={s.status} /><ChevronRight size={18} /></Link>)}</div> : <Empty title="Your first contribution is waiting">Pick a project that sparks your curiosity. <Link href="/">Explore a small task →</Link></Empty>}</>}
+          {view === "contributions" && <><PageTitle eyebrow="LITTLE STEPS, REAL IMPACT" title="My contributions" description="Every thoughtful attempt is a step forward. Your work lives here." />{!user ? <SignInPrompt onClick={() => setAuthOpen(true)} /> : ownSubmissions.length ? <div className="list-panel">{ownSubmissions.map(s => <Link className="submission-row" href={url(s.status === "draft" ? "workspace" : "contribution", s.status === "draft" ? s.task_id : s.id)} key={s.id}><span className="task-icon">{s.project_id === "campus-energy-detective" ? <Leaf size={21} /> : s.project_id === "ai-answer-check" ? <Sparkles size={21} /> : s.content.format === "route-selection" ? <Bot size={23} /> : <BookOpen size={21} />}</span><div><small>{s.project_title}</small><h3>{s.content.title}</h3><p>{s.current_revision ? `Revision ${s.current_revision}` : "Your draft is saved"} · Task version {s.task_version}</p></div><Badge status={s.status} /><ChevronRight size={18} /></Link>)}</div> : <Empty title="Your first contribution is waiting">Pick a project that sparks your curiosity. <Link href="/">Explore a small task →</Link></Empty>}</>}
           {view === "contribution" && (submission ? <Contribution submission={submission} data={data} /> : <Empty title="Contribution not found">Sign in with the account that owns this contribution.</Empty>)}
           {view === "applications" && <Applications data={data} action={action} busy={busy} signIn={() => setAuthOpen(true)} />}
           {view === "apply" && (project ? <Apply key={project.id} project={project} data={data} action={action} busy={busy} navigate={navigate} /> : <Empty title="Project not found">Choose a project to get started.</Empty>)}
@@ -118,22 +131,26 @@ function SignInPrompt({ onClick }: { onClick: () => void }) { return <Empty titl
 
 function Explore({ data, search, setSearch }: { data: Data; search: string; setSearch: (value: string) => void }) {
   const [filter, setFilter] = useState("All projects");
-  const projects = data.projects.filter(p => p.status === "published" && `${p.title} ${p.topic} ${p.disciplines}`.toLowerCase().includes(search.toLowerCase()) && (filter === "All projects" || p.topic === filter || (filter === "Beginner friendly" && !p.preview)));
+  const published = data.projects.filter(p => p.status === "published");
+  const topics = [...new Set(published.map(p => p.topic))].sort((a, b) => a.localeCompare(b));
+  const query = search.trim().toLocaleLowerCase();
+  const projects = published.filter(p => `${p.title} ${p.topic} ${p.disciplines} ${p.problem} ${p.description} ${p.team}`.toLocaleLowerCase().includes(query) && (filter === "All projects" || p.topic === filter || (filter === "Beginner friendly" && p.accepting && data.tasks.some(t => t.project_id === p.id && t.status === "published"))));
   return <>
     <PageTitle eyebrow="YOUR CURIOSITY BELONGS HERE" title="Big ideas. Small beginnings." description="Explore a project. Try a small task. See where it takes you." />
     <TaskRecommendations key={`${data.user?.id}-${data.user?.interests}`} data={data} />
     <section className="hero"><div className="hero-copy"><span className="hero-kicker"><span /> NO APPLICATION. JUST A LITTLE CURIOSITY.</span><h2>You don’t have to join a team<br className="desktop-break" /> to be part of something.</h2><p>Try a bite-sized task, get feedback from a real person,<br className="desktop-break" /> and make your first contribution. The rest can come later.</p><Link href={url("project", "robot-route-rescue")} className="button dark">Find your first task <ArrowRight size={16} /></Link><span className="hero-footnote"><CheckCircle2 size={13} /> Beginner-friendly. Pressure-free. Actually meaningful.</span></div><RobotArt /><span className="hero-art-caption"><span /> A small robot. A big adventure.</span></section>
     <section className="how-strip"><div className="how-intro">A little effort.<br /><strong>A real way in.</strong></div>{[{ icon: Compass, title: "Find your spark", desc: "A problem you care about" }, { icon: Lightbulb, title: "Give it a test drive", desc: "One small, guided task" }, { icon: HeartHandshake, title: "Build from there", desc: "Feedback, credit & maybe a team" }].map((s, i) => <div className="how-step" key={s.title}><span className={`how-icon how-${i}`}><s.icon size={20} /></span><div><h3>{s.title}</h3><p>{s.desc}</p></div>{i < 2 && <ChevronRight size={16} className="how-arrow" />}</div>)}</section>
-    <section className="explore-section"><div className="section-heading"><div><h2>Find something worth trying <span className="title-count">{data.projects.filter(p => p.status === "published").length}</span></h2><p>Different interests. Different starting points. All welcome.</p></div><label className="search-box"><Search size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects…" aria-label="Search projects" /><kbd>⌕</kbd></label></div>
-      <div className="filter-row"><div className="filter-tabs">{["All projects", "Robotics", "Climate & Data", "AI & Society", "Beginner friendly"].map(f => <button key={f} className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>{f === "Beginner friendly" && <Sparkles size={13} />}{f}</button>)}</div><span className="results-count">{projects.length} project{projects.length !== 1 ? "s" : ""} to explore</span></div>
-      {projects.length ? <div className="project-grid">{projects.map((p, i) => <ProjectCard project={p} key={p.id} index={i} data={data} />)}</div> : <Empty title="Nothing here just yet">Try a different topic or search term.</Empty>}
+    <section className="explore-section"><div className="section-heading"><div><h2>Find something worth trying <span className="title-count">{data.projects.filter(p => p.status === "published").length}</span></h2><p>Different interests. Different starting points. All welcome.</p></div><label className="search-box"><Search size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects…" aria-label="Search projects" />{search ? <button type="button" className="icon-button clear-search" onClick={() => setSearch("")} aria-label="Clear search"><X size={14} /></button> : <kbd>⌕</kbd>}</label></div>
+      <div className="filter-row"><div className="filter-tabs">{["All projects", ...topics, "Beginner friendly"].map(f => <button key={f} className={filter === f ? "active" : ""} onClick={() => setFilter(f)}>{f === "Beginner friendly" && <Sparkles size={13} />}{f}</button>)}</div><span className="results-count">{projects.length} project{projects.length !== 1 ? "s" : ""} to explore</span></div>
+      {projects.length ? <div className="project-grid">{projects.map((p, i) => <ProjectCard project={p} key={p.id} index={i} data={data} />)}</div> : <Empty title="Nothing here just yet">Try a different topic or search term. {(search || filter !== "All projects") && <button type="button" className="text-button" onClick={() => { setSearch(""); setFilter("All projects"); }}>Reset filters</button>}</Empty>}
     </section>
     <section className="bottom-callout"><span className="callout-icon"><GraduationCap size={25} /></span><div><h3>Not an expert? You’re in the right place.</h3><p>These tasks are built for learning. Bring your perspective, not a perfect résumé.</p></div><span className="handwritten">Start where you are. <span>↗</span></span></section>
   </>;
 }
 function ProjectCard({ project: p, index, data }: { project: Project; index: number; data: Data }) {
-  const kind = p.id === "campus-energy-detective" ? 1 : p.id === "ai-answer-check" ? 2 : 0;
-  const task = data.tasks.find(t => t.project_id === p.id && t.status === "published");
+  const kind = p.id === "campus-energy-detective" || /climate|energy|environment|garden|sustain/i.test(p.topic) ? 1 : p.id === "ai-answer-check" || /ai|society|research|writing|policy/i.test(p.topic) ? 2 : 0;
+  const publishedTasks = data.tasks.filter(t => t.project_id === p.id && t.status === "published");
+  const task = publishedTasks[0];
   const seeded = ["robot-route-rescue", "campus-energy-detective", "ai-answer-check"].includes(p.id);
   const initials = task?.reviewer_name.split(" ").map(n => n[0]).slice(0, 2).join("");
   return <article className="project-card" style={{ animationDelay: `${index * 80}ms` }}>
@@ -143,10 +160,10 @@ function ProjectCard({ project: p, index, data }: { project: Project; index: num
       {kind === 0 ? <RobotArt small /> : kind === 1 ? <EnergyArt /> : <AIArt />}
     </Link>
     <div className="card-body">
-      <div className="card-team"><span className="team-dot">{kind === 0 ? "R" : kind === 1 ? "E" : "A"}</span><span className="team-name">{seeded ? kind === 0 ? "Campus Robotics Collective" : kind === 1 ? "The Greener Campus Lab" : "Responsible AI Studio" : p.team.split("\n")[0]}</span>{seeded && <span className="tiny-demo">DEMO</span>}</div>
+      <div className="card-team"><span className="team-dot">{seeded ? (kind === 0 ? "R" : kind === 1 ? "E" : "A") : (p.title.trim()[0]?.toUpperCase() || "P")}</span><span className="team-name">{seeded ? kind === 0 ? "Campus Robotics Collective" : kind === 1 ? "The Greener Campus Lab" : "Responsible AI Studio" : p.team.split("\n")[0]}</span>{seeded && <span className="tiny-demo">DEMO</span>}</div>
       <h3><Link href={url("project", p.id)}>{p.title}</Link></h3><p className="card-description">{p.problem}</p>
-      <div className="starter-preview"><span className="starter-label"><Flag size={12} /> YOUR FIRST SMALL TASK</span><strong>{task ? task.id === "robot-first-route" ? "Pick a route. Explain your thinking." : task.content.title : p.preview ? kind === 1 ? "Spot an energy pattern that stands out." : "Find a claim that needs a fact-check." : "A starter task is on its way."}</strong><div className="task-meta"><Time>{task?.content.duration || "15–20 min"}</Time><span className="meta-divider" /><span title={task?.content.prerequisites}>{task ? task.content.prerequisites.startsWith("No coding") ? "No coding needed" : task.content.prerequisites.slice(0, 35) : "Beginner friendly"}</span></div></div>
-      <div className="card-footer"><span>{p.preview ? "Interactive task coming soon" : task ? <><span className="reviewer-avatar">{initials}</span> Human feedback included</> : "No published task yet"}</span><Link href={url("project", p.id)} className={p.preview ? "card-link muted" : "card-link"}>{p.preview ? "View preview" : "Explore project"}<ArrowUpRight size={15} /></Link></div>
+      <div className="starter-preview"><span className="starter-label"><Flag size={12} /> {publishedTasks.length > 1 ? `${publishedTasks.length} SMALL TASKS READY` : "YOUR FIRST SMALL TASK"}</span><strong>{task ? task.id === "robot-first-route" ? "Pick a route. Explain your thinking." : task.content.title : p.preview ? kind === 1 ? "Spot an energy pattern that stands out." : "Find a claim that needs a fact-check." : "A starter task is on its way."}</strong><div className="task-meta"><Time>{task?.content.duration || "15–20 min"}</Time><span className="meta-divider" /><span title={task?.content.prerequisites}>{task ? task.content.prerequisites.startsWith("No coding") ? "No coding needed" : task.content.prerequisites.slice(0, 35) : "Beginner friendly"}</span></div></div>
+      <div className="card-footer"><span>{p.preview ? "Starter task coming soon" : task ? <><span className="reviewer-avatar">{initials}</span> Human feedback included</> : "No published task yet"}</span><Link href={url("project", p.id)} className={p.preview ? "card-link muted" : "card-link"}>{p.preview ? "View preview" : "Explore project"}<ArrowUpRight size={15} /></Link></div>
     </div>
   </article>;
 }
@@ -154,16 +171,17 @@ function ProjectCard({ project: p, index, data }: { project: Project; index: num
 function ProjectPage({ project: p, data }: { project: Project; data: Data }) {
   const tasks = data.tasks.filter(t => t.project_id === p.id && t.status === "published");
   const artifacts = data.artifacts.filter(a => a.project_id === p.id);
-  return <><Link className="back-link" href="/"><ArrowLeft size={15} /> All projects</Link><Progress step={0} /><div className="project-detail-header"><div><span className="badge topic-badge">{p.topic} · Fictional demo project</span><h1>{p.title}</h1><p>{p.problem}</p><div className="detail-meta"><Time>{p.duration}</Time><span><Users size={15} />{p.commitment}</span><span className="availability-dot" />{p.accepting && p.status === "published" ? "Accepting contributors" : "Not accepting contributors"}</div></div><div className="detail-robot">{p.id === "campus-energy-detective" ? <EnergyArt /> : p.id === "ai-answer-check" ? <AIArt /> : <RobotArt small />}</div></div>
+  const kind = p.id === "campus-energy-detective" || /climate|energy|environment|garden|sustain/i.test(p.topic) ? 1 : p.id === "ai-answer-check" || /ai|society|research|writing|policy/i.test(p.topic) ? 2 : 0;
+  return <><Link className="back-link" href="/"><ArrowLeft size={15} /> All projects</Link><Progress step={0} /><div className="project-detail-header"><div><span className="badge topic-badge">{p.topic} · Fictional demo project</span><h1>{p.title}</h1><p>{p.problem}</p><div className="detail-meta"><Time>{p.duration}</Time><span><Users size={15} />{p.commitment}</span><span className="availability-dot" />{p.accepting && p.status === "published" ? "Accepting contributors" : "Not accepting contributors"}</div></div><div className={`detail-robot art-${kind}`}>{kind === 1 ? <EnergyArt /> : kind === 2 ? <AIArt /> : <RobotArt small />}</div></div>
     <div className="two-column"><div className="stack">
       <section className="panel prose"><div className="section-eyebrow">THE BIGGER PICTURE</div><h2>A real problem. A place to start.</h2><p>{p.description}</p><h3>What we’re working toward</h3><p>{p.goal}</p><h3>Relevant disciplines</h3><p>{p.disciplines}</p></section>
-      <section className="panel"><div className="section-heading"><div><div className="section-eyebrow">SOMETHING YOU CAN DO TODAY</div><h2>Start with one small task</h2></div><Flag size={21} /></div>
-        {tasks.length ? tasks.map(t => <div className="task-detail" key={t.id}>
+      <section className="panel"><div className="section-heading"><div><div className="section-eyebrow">{tasks.length ? "SOMETHING YOU CAN DO TODAY" : "GETTING READY"}</div><h2>{tasks.length ? "Start with one small task" : "Starter tasks are on the way"} {tasks.length > 1 && <span className="title-count">{tasks.length}</span>}</h2></div><Flag size={21} /></div>
+        {tasks.length ? <div className="task-detail-list">{tasks.map(t => <div className="task-detail" key={t.id}>
           <span className="badge beginner-badge">{t.content.format === "written-response" ? "Text task · beginner friendly" : "Interactive demo · beginner friendly"}</span><h3>{t.content.title}</h3><p>{t.content.learningGoal}</p><MaterialNotice content={t.content} />
           <div className="task-meta"><Time>{t.content.duration}</Time><span><BookOpen size={14} />{t.content.prerequisites}</span></div>
           <div className="reviewer-line"><span className="reviewer-avatar">{t.reviewer_name.split(" ").map(s => s[0]).join("")}</span><span>Reviewed by <strong>{t.reviewer_name}</strong> · human feedback</span></div>
           {p.accepting && p.status === "published" && <Link className="button" href={url("workspace", t.id)}>Try a small task <ArrowRight size={16} /></Link>}
-        </div>) : <div className="notice"><Lightbulb size={20} /><div><strong>No published task yet.</strong><p>A lead can create and publish a text task for this project. Try the predefined Robot Route Rescue task in the meantime.</p><Link href={url("project", "robot-route-rescue")}>Explore Robot Route Rescue →</Link></div></div>}
+        </div>)}</div> : <div className="notice"><Lightbulb size={20} /><div><strong>No published task yet.</strong><p>A lead can create and publish a text task for this project. Try the predefined Robot Route Rescue task in the meantime.</p><Link href={url("project", "robot-route-rescue")}>Explore Robot Route Rescue →</Link></div></div>}
       </section>
     <section className="panel"><div className="section-eyebrow">BUILT TOGETHER</div><h2>The shared project notebook <span className="title-count">{artifacts.length}</span></h2><p className="muted-text">Human-approved contributions, credited to the people who made them. Joining is never required for credit.</p>{artifacts.length ? artifacts.map(a => <ArtifactCard artifact={a} key={a.id} />) : <div className="artifact-empty"><BookOpen size={22} /><span>The first page is still open. Your contribution could start it.</span></div>}</section></div>
     <aside className="stack"><section className="panel"><h3>The people behind it</h3><p className="demo-explainer">All names and mentor roles below are fictional demo content.</p>{p.team.split("\n").map((member, i) => <div className="team-member" key={i}><span className={`avatar avatar-${i}`}>{member.split(" ").slice(0, 2).map(s => s[0]).join("")}</span><span>{member}</span></div>)}</section><section className="panel pale-panel"><span className="section-eyebrow">IF YOU WANT TO STAY A WHILE</span><h3>Find your place on the team</h3><p>Try a task first. Joining can be your next step—not your first hurdle.</p><ul className="role-list">{p.roles.split("\n").map(r => <li key={r}><Circle size={7} />{r}</li>)}</ul><div className="commitment"><Time>{p.duration}</Time><Time>{p.commitment}</Time></div><p className="small-print">An approved contribution unlocks the optional team application.</p></section><section className="panel"><h3>Starter materials</h3><p className="muted-text">{p.materials}</p><span className="small-print">Included in the application · no downloads or uploads needed</span></section></aside></div>
@@ -231,16 +249,18 @@ function ProjectEditor({ project, action, busy, navigate }: { project?: Project;
   const fields = [{ key: "title", label: "Project title", placeholder: "Something worth exploring", min: 4 }, { key: "problem", label: "The problem, in a sentence", placeholder: "What needs a fresh perspective?", min: 15 }, { key: "goal", label: "Project goal", placeholder: "What are you working toward?", min: 15 }, { key: "description", label: "Description & current work", placeholder: "Give a beginner the context they need…", area: true, min: 30 }, { key: "topic", label: "Topic", placeholder: "Robotics, Climate & Data…" }, { key: "disciplines", label: "Relevant disciplines", placeholder: "Engineering, Design, Computer science" }, { key: "materials", label: "Starter materials", placeholder: "Describe the supplied materials. Only the bundled campus route map is interactive in this MVP.", area: true, min: 10 }, { key: "team", label: "Team & mentor information", placeholder: "One person per line. Clearly mark fictional people and demo mentor roles.", area: true }, { key: "roles", label: "Available longer-project roles", placeholder: "One role per line", area: true }, { key: "duration", label: "Project duration", placeholder: "6 weeks" }, { key: "commitment", label: "Expected weekly commitment", placeholder: "2–3 hours / week" }] as const;
   return <>
     <Link className="back-link" href={url("lead")}><ArrowLeft size={15} /> Lead space</Link><PageTitle eyebrow="A CLEAR START MAKES ALL THE DIFFERENCE" title={project ? "Edit your project" : "Create a project"} description="Tell students what they can do today—not just what they could become." />
-    {!project && <ProjectVoice disabled={busy} onApply={suggestion => {
-      const hasEdits = fields.some(f => f.key === "topic" ? form.topic !== "Robotics" : Boolean(form[f.key]));
-      if (hasEdits && !window.confirm("Replace your current project fields with this AI draft? Your contributor acceptance setting will be preserved.")) return false;
-      setForm(current => ({ ...current, ...suggestion })); return true;
-    }} />}
-    <form className="panel form-panel editor-form" onSubmit={async e => { e.preventDefault(); const result = await action("save-project", project?.id || "", form, "Project saved. Publication is a separate, explicit step."); if (result) navigate("lead"); }}>
-      <div className="notice"><Flag size={18} /><p>{project?.status === "published" ? "Changes to this published project will be visible after saving." : "Your project stays private as a draft until you explicitly publish it."}</p></div>
-      <div className="form-grid">{fields.map(f => <div className={"area" in f ? "span-two" : ""} key={f.key}><Field label={f.label}>{"area" in f ? <textarea required minLength={"min" in f ? f.min : 1} maxLength={8000} rows={3} placeholder={f.placeholder} value={String(form[f.key])} onChange={e => setForm({ ...form, [f.key]: e.target.value })} /> : <input required minLength={"min" in f ? f.min : 1} maxLength={f.key === "title" ? 120 : 8000} placeholder={f.placeholder} value={String(form[f.key])} onChange={e => setForm({ ...form, [f.key]: e.target.value })} />}</Field></div>)}</div>
-      <label className="checkbox-label"><input type="checkbox" checked={form.accepting} onChange={e => setForm({ ...form, accepting: e.target.checked })} /> Accept contributors when this project is published</label><button className="button" disabled={busy || project?.status === "closed"}><Save size={16} />{project?.status === "published" ? "Save changes" : "Save project draft"}</button>
-    </form>
+    <div className="stack">
+      {!project && <ProjectVoice disabled={busy} onApply={suggestion => {
+        const hasEdits = fields.some(f => f.key === "topic" ? form.topic !== "Robotics" : Boolean(form[f.key]));
+        if (hasEdits && !window.confirm("Replace your current project fields with this AI draft? Your contributor acceptance setting will be preserved.")) return false;
+        setForm(current => ({ ...current, ...suggestion })); return true;
+      }} />}
+      <form className="panel form-panel editor-form" onSubmit={async e => { e.preventDefault(); const result = await action("save-project", project?.id || "", form, "Project saved. Publication is a separate, explicit step."); if (result) navigate("lead"); }}>
+        <div className="notice"><Flag size={18} /><p>{project?.status === "published" ? "Changes to this published project will be visible after saving." : "Your project stays private as a draft until you explicitly publish it."}</p></div>
+        <div className="form-grid">{fields.map(f => <div className={"area" in f ? "span-two" : ""} key={f.key}><Field label={f.label}>{"area" in f ? <textarea required minLength={"min" in f ? f.min : 1} maxLength={8000} rows={3} placeholder={f.placeholder} value={String(form[f.key])} onChange={e => setForm({ ...form, [f.key]: e.target.value })} /> : <input required minLength={"min" in f ? f.min : 1} maxLength={f.key === "title" ? 120 : 8000} placeholder={f.placeholder} value={String(form[f.key])} onChange={e => setForm({ ...form, [f.key]: e.target.value })} />}</Field></div>)}</div>
+        <label className="checkbox-label"><input type="checkbox" checked={form.accepting} onChange={e => setForm({ ...form, accepting: e.target.checked })} /> Accept contributors when this project is published</label><button className="button" disabled={busy || project?.status === "closed"}><Save size={16} />{project?.status === "published" ? "Save changes" : "Save project draft"}</button>
+      </form>
+    </div>
   </>;
 }
 
@@ -330,9 +350,11 @@ function ApplicantDashboard({ data, action, busy }: { data: Data } & Actions) {
 function Profile({ data, action, busy }: { data: Data } & Actions) {
   const [name, setName] = useState(data.user?.name || ""); const [interests, setInterests] = useState(data.user?.interests || "");
   return <><PageTitle eyebrow="BRING YOUR OWN PERSPECTIVE" title="Your profile" description="A name and a little curiosity. That’s a good place to start." />
-    <p className="small-print">When you apply to a team, that project’s leads can see your current saved profile interests.</p>
-    <ResumeImport disabled={busy} onApply={values => setInterests(mergeInterests(interests, values))} />
-    <form className="panel form-panel narrow-form" onSubmit={e => { e.preventDefault(); action("profile", "", { name, interests }, "Profile updated."); }}><Field label="Display name"><input required minLength={2} maxLength={100} value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Interests"><textarea rows={4} maxLength={1000} value={interests} onChange={e => setInterests(e.target.value)} /></Field><p className="small-print">Email: {data.user?.email}. Credentials are managed by Better Auth, not your profile.</p><button className="button" disabled={busy}>Save profile <Check size={15} /></button></form></>;
+    <div className="stack">
+      <p className="small-print">When you apply to a team, that project’s leads can see your current saved profile interests.</p>
+      <ResumeImport disabled={busy} onApply={values => setInterests(mergeInterests(interests, values))} />
+      <form className="panel form-panel narrow-form" onSubmit={e => { e.preventDefault(); action("profile", "", { name, interests }, "Profile updated."); }}><Field label="Display name"><input required minLength={2} maxLength={100} value={name} onChange={e => setName(e.target.value)} /></Field><Field label="Interests"><textarea rows={4} maxLength={1000} value={interests} onChange={e => setInterests(e.target.value)} /></Field><p className="small-print">Email: {data.user?.email}. Credentials are managed by Better Auth, not your profile.</p><button className="button" disabled={busy}>Save profile <Check size={15} /></button></form>
+    </div></>;
 }
 
 function AuthModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => Promise<void> }) {

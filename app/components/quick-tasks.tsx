@@ -21,10 +21,12 @@ export default function QuickTasks({ project, disabled, onPublished }: { project
     } catch (e) { setError(e instanceof Error ? e.message : "Could not generate tasks. Reload to check the project before trying again."); }
     finally { inFlight.current = false; setWorking(false); }
   }
-  return <div className="stack">
-    <button type="button" className="button secondary small" disabled={disabled || working} onClick={generate}>{working ? <Loader2 size={15} className="spin" /> : <Sparkles size={15} />}{working ? "Generating & publishing…" : "Generate & publish 2–3 tasks"}</button>
-    <p className="small-print">AI chooses 2 or 3 distinct, simple short-answer tasks and publishes them immediately—no review step. May use labeled fictional demo materials.</p>
-    {working && <p role="status">Preparing small project-specific tasks…</p>}
-    {status && <p role="status">{status}</p>}{error && <p className="inline-error" role="alert">{error}</p>}
+  return <div className="quick-tasks">
+    <div className="quick-tasks-header">
+      <button type="button" className="button secondary small" disabled={disabled || working} onClick={generate}>{working ? <Loader2 size={15} className="spin" /> : <Sparkles size={15} />}{working ? "Generating & publishing…" : "Generate & publish 2–3 tasks"}</button>
+      <span className="small-print">AI chooses 2 or 3 distinct, simple short-answer tasks and publishes them immediately—no review step. May use labeled fictional demo materials.</span>
+    </div>
+    {working && <p className="status-note" role="status">Preparing small project-specific tasks…</p>}
+    {status && <p className="status-note" role="status">{status}</p>}{error && <p className="inline-error" role="alert">{error}</p>}
   </div>;
 }

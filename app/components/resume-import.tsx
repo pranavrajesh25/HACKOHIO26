@@ -43,8 +43,8 @@ export default function ResumeImport({ disabled, onApply }: { disabled: boolean;
       onApply(values); setSuggestions([]); setStatus("Suggestions merged into the Interests field. Review it and select Save profile to keep your changes."); setError("");
     } catch (e) { setError(e instanceof Error ? e.message : "Could not merge suggestions. Your interests are unchanged."); }
   }
-  return <section className="panel form-panel narrow-form" aria-label="Import interests from résumé">
-    <h2>Import interests from your résumé</h2>
+  return <section className="panel form-panel narrow-form resume-panel" aria-label="Import interests from résumé">
+    <div className="section-heading"><div><div className="section-eyebrow">OPTIONAL PROFILE IMPORT</div><h2>Import interests from your résumé</h2></div><span className="badge">PDF ANALYSIS</span></div>
     <p>Choose a CV or résumé PDF (up to 5 MB). Haiku suggests interest keywords from your skills, studies, and projects—not verified credentials. You choose what to keep.</p>
     <label className="field"><span>CV or résumé PDF</span><input ref={input} type="file" accept="application/pdf,.pdf" disabled={working || disabled} onChange={event => {
       const selected = event.target.files?.[0] || null;
@@ -53,15 +53,15 @@ export default function ResumeImport({ disabled, onApply }: { disabled: boolean;
       setFile(selected);
     }} /></label>
     <label className="checkbox-label"><input type="checkbox" checked={consent} disabled={working || disabled} onChange={event => setConsent(event.target.checked)} /> I agree to send this PDF to OpenRouter and its model provider for analysis. This app does not store the PDF; external-provider retention policies apply.</label>
-    <button type="button" className="button secondary" disabled={working || disabled || !file || !consent} onClick={analyze}>{working ? "Analyzing résumé…" : "Suggest interests from PDF"}</button>
-    {suggestions.length > 0 && <div className="stack">
+    <div className="inline-actions"><button type="button" className="button secondary" disabled={working || disabled || !file || !consent} onClick={analyze}>{working ? "Analyzing résumé…" : "Suggest interests from PDF"}</button></div>
+    {suggestions.length > 0 && <div className="suggestion-list">
       <h3>Suggested interest keywords</h3>
-      {suggestions.map((value, index) => <div className="response-actions" key={index}>
+      {suggestions.map((value, index) => <div className="suggestion-row" key={index}>
         <label className="field"><span>Suggested interest {index + 1}</span><input value={value} maxLength={60} disabled={disabled} onChange={event => setSuggestions(current => current.map((item, i) => i === index ? event.target.value : item))} /></label>
-        <button type="button" className="button secondary" disabled={disabled} aria-label={`Remove suggested interest ${index + 1}`} onClick={() => setSuggestions(current => current.filter((_, i) => i !== index))}>Remove</button>
+        <button type="button" className="button secondary small" disabled={disabled} aria-label={`Remove suggested interest ${index + 1}`} onClick={() => setSuggestions(current => current.filter((_, i) => i !== index))}>Remove</button>
       </div>)}
-      <button type="button" className="button secondary" disabled={disabled} onClick={apply}>Merge suggestions into interests</button>
+      <div className="inline-actions"><button type="button" className="button secondary" disabled={disabled} onClick={apply}>Merge suggestions into interests</button></div>
     </div>}
-    {status && <p role="status">{status}</p>}{error && <p className="inline-error" role="alert">{error}</p>}
+    {status && <p className="status-note" role="status">{status}</p>}{error && <p className="inline-error" role="alert">{error}</p>}
   </section>;
 }

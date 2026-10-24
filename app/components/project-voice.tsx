@@ -73,19 +73,24 @@ export default function ProjectVoice({ onApply, disabled }: { onApply: (fields: 
     finally { if (mounted.current) setPhase("idle"); }
   }
   const working = phase !== "idle" || disabled;
-  return <section className="panel form-panel" aria-label="Voice project draft">
-    <h2>Describe your project out loud</h2>
+  return <section className="panel form-panel editor-form voice-panel" aria-label="Voice project draft">
+    <div className="section-heading"><div><div className="section-eyebrow">OPTIONAL VOICE & TEXT DRAFTING</div><h2>Describe your project out loud</h2></div><span className="badge">AI ASSISTANT</span></div>
     <p>Around 30 seconds is ideal; recording stops at 60 seconds. What problem are you solving, who is it for, and how could a student help?</p>
     <p className="small-print">Audio is sent to OpenRouter only when you generate a draft. We do not save the recording. AI may suggest details; review every field before saving. Nothing is published automatically.</p>
-    <div className="response-actions"><button type="button" className="button secondary" disabled={working} onClick={start}>{audio ? "Re-record description" : "Record description"}</button>
-      {phase === "recording" && <button type="button" className="button secondary" onClick={stop}>Stop recording</button>}
-      <span role="status">{phase === "recording" ? `Recording ${seconds}s / 60s` : phase === "processing" ? "Transcribing and drafting…" : phase === "starting" ? "Waiting for microphone permission…" : audio ? `Recording ready (${seconds}s)` : ""}</span>
+    <div className="voice-controls">
+      <div className="inline-actions">
+        <button type="button" className="button secondary" disabled={working} onClick={start}>{audio ? "Re-record description" : "Record description"}</button>
+        {phase === "recording" && <button type="button" className="button secondary" onClick={stop}>Stop recording</button>}
+        <span className={`voice-status ${phase === "recording" ? "is-recording" : ""}`} role="status">{phase === "recording" ? `Recording ${seconds}s / 60s` : phase === "processing" ? "Transcribing and drafting…" : phase === "starting" ? "Waiting for microphone permission…" : audio ? `Recording ready (${seconds}s)` : ""}</span>
+      </div>
+      {url && <div className="voice-playback">
+        <audio controls src={url} aria-label="Recorded project description" />
+        {audio && <button type="button" className="button secondary" disabled={working} onClick={() => generate(false)}>Generate project draft from recording</button>}
+      </div>}
     </div>
-    {url && <audio controls src={url} aria-label="Recorded project description" />}
-    {audio && <button type="button" className="button secondary" disabled={working} onClick={() => generate(false)}>Generate project draft from recording</button>}
     <label className="field"><span>Transcript or typed project description</span><textarea rows={3} maxLength={12000} value={transcript} disabled={working} onChange={e => setTranscript(e.target.value)} placeholder="You can also type here, or edit the transcript and retry." /></label>
-    <button type="button" className="button secondary" disabled={working || transcript.trim().length < 20} onClick={() => generate(true)}>Generate project draft from text</button>
-    {error && <p role="alert">{error}</p>}
+    <div className="inline-actions"><button type="button" className="button secondary" disabled={working || transcript.trim().length < 20} onClick={() => generate(true)}>Generate project draft from text</button></div>
+    {error && <p className="inline-error" role="alert">{error}</p>}
     {applied && <div className="notice" role="status"><p><strong>AI-suggested draft applied. Review all fields.</strong> {suggestions.length ? `Inferred or synthesized fields: ${suggestions.join(", ")}.` : "Check the draft against your description."} Nothing has been saved or published.</p></div>}
   </section>;
 }

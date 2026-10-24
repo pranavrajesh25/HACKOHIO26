@@ -2,9 +2,24 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Clock3, HeartHandshake, Loader2, Save, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Circle, Clock3, HeartHandshake, Loader2, Save, Send } from "lucide-react";
 import type { Data, Task } from "@/lib/types";
 import { TaskMaterials } from "./task-content";
+
+const statusLabels: Record<string, string> = { draft: "Draft", submitted: "Awaiting feedback", revision_requested: "Revision requested", resubmitted: "Resubmitted", approved: "Approved", published: "Published", closed: "Closed" };
+function WorkspaceProgress() {
+  return (
+    <div className="progress-track">
+      {["Discover", "Try a task", "Get feedback", "Make it yours"].map((s, i) => (
+        <div key={s} className={1 >= i ? "active" : ""}>
+          <span>{1 > i ? <Check size={12} /> : i + 1}</span>
+          {s}
+          {i < 3 && <ChevronRight size={13} />}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type Props = {
   task: Task; data: Data; busy: boolean; signIn: () => void;
@@ -29,12 +44,13 @@ export default function TextWorkspace({ task, data, action, busy, signIn, naviga
   }
   return <>
     <Link className="back-link" href={`/?view=project&id=${encodeURIComponent(task.project_id)}`}><ArrowLeft size={15} /> Back to project</Link>
-    <div className="page-title"><div><div className="eyebrow">YOUR SMALL WRITTEN CONTRIBUTION</div><h1>{content.title}</h1><p>{content.learningGoal}</p></div><span className="badge">{submission ? submission.status.replaceAll("_", " ") : "Draft"}</span></div>
+    <WorkspaceProgress />
+    <div className="page-title"><div><div className="eyebrow">YOUR SMALL WRITTEN CONTRIBUTION</div><h1>{content.title}</h1><p>{content.learningGoal}</p></div><span className={`badge status-${submission?.status || "draft"}`}>{submission?.status === "approved" && <Check size={12} />}{statusLabels[submission?.status || "draft"] || submission?.status}</span></div>
     {submission?.status === "revision_requested" && <div className="notice revision-notice"><HeartHandshake size={20} /><div><strong>Your reviewer has feedback for you</strong><p>{submission.revisions.at(-1)?.review?.feedback}</p><p>Your earlier revision is preserved. Update your response and resubmit when ready.</p></div></div>}
     {!editable && <div className="notice"><CheckCircle2 size={20} /><div><strong>Your submitted response is saved and read-only.</strong><p>You can revise if your reviewer requests changes.</p><Link href={`/?view=contribution&id=${submission!.id}`}>View contribution and feedback →</Link></div></div>}
     <div className="workspace-grid">
       <div className="stack">
-        <section className="panel instructions-panel"><div className="section-eyebrow">01 · READ THE TASK</div><h2>Your task</h2><p className="preserve-text">{content.instructions}</p><div className="task-meta"><span><Clock3 size={14} />{content.duration}</span><span>{content.prerequisites}</span></div><h3>Expected deliverable</h3><p>{content.deliverable}</p></section>
+        <section className="panel instructions-panel"><div className="section-eyebrow">01 · READ THE TASK</div><h2>Your task</h2><p className="preserve-text">{content.instructions}</p><div className="task-meta"><span><Clock3 size={14} />{content.duration}</span><span><BookOpen size={14} />{content.prerequisites}</span></div><h3>Expected deliverable</h3><p>{content.deliverable}</p></section>
         <section className="panel"><TaskMaterials content={content} /></section>
         <section className="panel"><h3>What your reviewer will look for</h3><p className="preserve-text">{content.criteria}</p>{content.hints && <><h3>A helpful hint</h3><p className="preserve-text">{content.hints}</p></>}</section>
       </div>

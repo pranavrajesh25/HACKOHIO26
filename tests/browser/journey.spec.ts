@@ -271,6 +271,40 @@ test("explore is responsive, searchable, and labels previews", async ({ page }) 
   await expect(page.getByRole("link", { name: "My contributions", exact: false })).toBeVisible();
 });
 
+test("core views stay within small screens and navigation and filters remain usable", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("textbox", { name: "Search projects" }).fill("no such project");
+  await expect(page.getByRole("heading", { name: "Nothing here just yet" })).toBeVisible();
+  await page.getByRole("button", { name: "Reset filters" }).click();
+  await expect(page.locator(".project-card").first()).toBeVisible();
+
+  for (const width of [320, 390, 768, 1024]) {
+    await page.setViewportSize({ width, height: 800 });
+    for (const view of ["/", "/?view=project&id=robot-route-rescue", "/?view=workspace&id=robot-first-route", "/?view=contributions", "/?view=applications"]) {
+      await page.goto(view);
+      await expect(page.locator("main")).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${view} overflows at ${width}px`).toBe(true);
+    }
+  }
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/");
+  const menu = page.getByRole("button", { name: "Open navigation" });
+  await menu.click();
+  await expect(menu).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("link", { name: "Project lead space", exact: false })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveAttribute("aria-expanded", "false");
+  await expect(menu).toBeFocused();
+
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("button", { name: "Try as lead", exact: true }).click();
+  for (const view of ["lead", "editor", "task-editor&id=campus-energy-detective", "profile", "applicants"]) {
+    await page.goto(`/?view=${view}`);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${view} overflows at 390px`).toBe(true);
+  }
+});
+
 test("AI-assisted energy demo publishes synthetic materials and accepts a student text contribution", async ({ page, request, browser }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
