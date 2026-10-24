@@ -5,12 +5,13 @@ import type { Project, Task, Submission, Application, Data, Revision, Artifact }
 import { routeTask, labelSyntheticMaterials } from "./content";
 import { taskSchema } from "./task-schema";
 import { projectSchema } from "./project-schema";
+import { taskBatchSchema } from "./task-batch";
 export { taskSchema } from "./task-schema";
 
 export class AppError extends Error { constructor(message: string, public status = 400) { super(message); } }
 const text = (min = 1, max = 8000) => z.string().trim().min(min).max(max);
 const routeAnswerSchema = z.object({ route: z.enum(["A", "B", "C"]), explanation: text(60, 5000).refine(s => s.split(/\s+/).length >= 12, "Explain your choice in at least 12 words."), missing: text(20, 3000) });
-const textAnswerSchema = z.object({ response: text(60, 10000).refine(s => s.split(/\s+/).length >= 12, "Write a response of at least 12 words.") });
+const textAnswerSchema = z.object({ response: text(1, 10000) });
 const draftAnswerSchema = z.union([z.object({ response: z.string().max(10000) }), z.object({ route: z.string().max(1), explanation: z.string().max(5000), missing: z.string().max(3000) })]);
 type Row = Record<string, string | number>;
 const row = (sql: string, ...args: (string | number)[]) => db.prepare(sql).get(...args) as Row | undefined;
@@ -31,6 +32,34 @@ export function getData(user?: { id: string; name: string; email: string }): Dat
   const reviewers = db.prepare("SELECT m.project_id,u.id,u.name FROM memberships m JOIN user u ON u.id=m.user_id WHERE m.role IN ('lead','reviewer') AND EXISTS (SELECT 1 FROM memberships own WHERE own.project_id=m.project_id AND own.user_id=? AND own.role='lead')").all(uid) as Data["reviewers"];
   const profile = row("SELECT interests FROM profiles WHERE id=?", uid);
   return { user: user ? { ...user, interests: String(profile?.interests ?? "") } : null, projects, tasks, submissions, applications, artifacts, managed, memberships, reviewers };
+}
+
+// Server-generated batches only: not exposed through the generic mutation API.
+export function publishTaskBatch(user: string, project: Project, rawTasks: unknown) {
+  return db.transaction(() => {
+    requireLead(user, project.id);
+    const current = requireRow(row("SELECT * FROM projects WHERE id=?", project.id));
+    if (current.status !== "published") throw new AppError("Publish the project first; closed projects cannot receive tasks.", 409);
+    for (const field of ["title", "problem", "goal", "description", "materials", "topic", "disciplines", "team", "roles", "duration", "commitment"] as const) {
+      if (current[field] !== project[field]) throw new AppError("The project changed during generation. Please try again.", 409);
+    }
+    const tasks = taskBatchSchema.parse(rawTasks).map(labelSyntheticMaterials);
+    const existing = db.prepare("SELECT content FROM tasks WHERE project_id=?").all(project.id) as { content: string }[];
+    const normalize = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+    if (tasks.some(task => existing.some(saved => {
+      const content = JSON.parse(saved.content);
+      return normalize(content.title) === normalize(task.title) || normalize(content.instructions) === normalize(task.instructions);
+    }))) throw new AppError("AI repeated an existing task. No tasks were added. Please try again.", 409);
+    const ids = tasks.map(task => {
+      const id = randomUUID(), content = JSON.stringify(task);
+      // approved stays false: automatic publication must not imply human review.
+      db.prepare("INSERT INTO tasks (id,project_id,reviewer,status,content,source) VALUES (?,?,?,'published',?,'ai-auto')").run(id, project.id, user, content);
+      db.prepare("INSERT INTO task_versions (task_id,version,content,reviewer) VALUES (?,1,?,?)").run(id, content, user);
+      return id;
+    });
+    db.prepare("UPDATE projects SET preview=0 WHERE id=?").run(project.id);
+    return ids;
+  }).immediate();
 }
 
 export function mutate(user: string, input: unknown) {

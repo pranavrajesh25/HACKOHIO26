@@ -1,6 +1,44 @@
 import { test, expect, type Page } from "@playwright/test";
 import { type TaskContent } from "../../lib/content";
 import { energyTask } from "../fixtures/energy-task";
+import { microtasks } from "../fixtures/task-batch";
+
+test("lead card generates and publishes a task batch without a review step", async ({ page }) => {
+  await register(page, "Quick Task Lead", `quick-${Date.now()}@example.test`);
+  const created = await page.request.post("/api/data", { data: { action: "save-project", payload: {
+    title: `Quick Energy ${Date.now()}`, problem: "Understand a small set of fictional campus power readings.", goal: "Help beginners read energy data.", description: "A fictional project for exploring small energy observations and beginner contributions.", topic: "Energy", disciplines: "Engineering", materials: "Fictional power readings for a demo.", team: "Quick Task Lead", roles: "Research", duration: "4 weeks", commitment: "1 hour per week", accepting: true,
+  } } });
+  expect(created.ok()).toBe(true);
+  const { id } = await created.json();
+  await page.goto("/?view=lead");
+  const button = page.getByRole("button", { name: "Generate & publish 2–3 tasks", exact: true });
+  await expect(button).toBeDisabled();
+  await page.getByRole("button", { name: "Publish project", exact: true }).click();
+  await expect(button).toBeEnabled();
+  // The isolated browser server has no provider key: no simulated auto-publication.
+  await button.click();
+  await expect(page.getByRole("alert").filter({ hasText: "requires an OpenRouter API key" })).toBeVisible();
+  let published = false, requests = 0;
+  await page.route("**/api/data", async route => {
+    const response = await route.fetch(); const data = await response.json();
+    if (published) data.tasks.push(...microtasks.slice(0, 2).map((content, i) => ({ id: `quick-task-${i}`, project_id: id, reviewer: data.user.id, reviewer_name: "Quick Task Lead", status: "published", current_version: 1, approved: 0, source: "ai-auto", content })));
+    await route.fulfill({ response, json: data });
+  });
+  await page.route("**/api/generate-tasks", async route => {
+    requests++; expect(route.request().postDataJSON()).toEqual({ project: id });
+    published = true; await route.fulfill({ json: { ids: ["quick-task-0", "quick-task-1"], count: 2 } });
+  });
+  await button.click();
+  await expect(page.getByRole("status").filter({ hasText: "2 tasks published." })).toContainText("Students can start now");
+  await expect(page.getByText(microtasks[0].title)).toBeVisible();
+  await expect(page.getByText("AI auto-published", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  expect(requests).toBe(1);
+  await page.route("**/api/generate-tasks", route => route.fulfill({ status: 502, json: { error: "AI could not create a valid task batch. No tasks were added." } }));
+  await button.click();
+  await expect(page.getByRole("alert").filter({ hasText: "No tasks were added" })).toBeVisible();
+  await expect(page.getByText("AI auto-published", { exact: true })).toHaveCount(2);
+});
 
 test("résumé suggestions are reviewed, edited, merged, and saved explicitly", async ({ page }) => {
   await register(page, "Résumé Student", `resume-${Date.now()}@example.test`);
@@ -269,12 +307,16 @@ test("AI-assisted energy demo publishes synthetic materials and accepts a studen
   await expect(student.getByText("Simulated fictional demo data (preset, not live AI)", { exact: true })).toBeVisible();
   await expect(student.locator(".task-materials")).toContainText("79");
   await expect(student.getByRole("radio")).toHaveCount(0);
-  await student.getByRole("textbox", { name: "Your response", exact: true }).fill("The 20:00 power reading of 79 kW stands out because it is higher than the 46 kW midday reading despite the building being closed. I would investigate equipment schedules and meter accuracy rather than assume the cause.");
+  await expect(student.getByRole("button", { name: "Submit contribution", exact: true })).toBeDisabled();
+  await student.getByRole("textbox", { name: "Your response", exact: true }).fill("   ");
+  await expect(student.getByRole("button", { name: "Submit contribution", exact: true })).toBeDisabled();
+  await student.getByRole("textbox", { name: "Your response", exact: true }).fill("20:00");
   await student.getByRole("button", { name: "Submit contribution", exact: true }).click();
   await expect(student.getByText("Awaiting human feedback on this revision")).toBeVisible();
   const submissionId = new URL(student.url()).searchParams.get("id");
   await page.goto(`/?view=review&id=${submissionId}`);
-  await page.getByLabel("Feedback on revision 1", { exact: true }).fill("Good use of units and careful distinction between an unusual reading and an explanation. Approved!");
+  await expect(page.getByText("20:00", { exact: true })).toBeVisible();
+  await page.getByLabel("Feedback on revision 1", { exact: true }).fill("You identified the time with the highest power reading. Approved!");
   await page.getByRole("button", { name: "Approve contribution", exact: true }).click();
   await expect(page.getByText("Contribution approved and credited in the shared artifact.")).toBeVisible();
   await student.reload();

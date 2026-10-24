@@ -26,7 +26,7 @@ test("a lead creates a private project and explicitly publishes an approved task
   assert.equal(getData().tasks.length, 1);
 });
 test("drafts are private and incomplete submissions roll back atomically", () => {
-  rejects(() => act(student, "submit", task, { answers: { response: "too short" }, expectedRevision: 0, expectedStatus: "draft", taskVersion: 1 }));
+  rejects(() => act(student, "submit", task, { answers: { response: " \n " }, expectedRevision: 0, expectedStatus: "draft", taskVersion: 1 }));
   rejects(() => act(student, "submit", task, { answers: { route: "B", explanation: "Wrong response type for this task.", missing: "Missing format validation" }, expectedRevision: 0, expectedStatus: "draft", taskVersion: 1 }));
   assert.equal(db.prepare("SELECT count(*) count FROM submissions").get() && (db.prepare("SELECT count(*) count FROM submissions").get() as { count: number }).count, 0);
   submission = String(act(student, "save-draft", task, { answers, expectedRevision: 0, expectedStatus: "draft", taskVersion: 1 }).id);
@@ -95,6 +95,18 @@ test("an application must link an owned, same-project approved contribution", ()
   assert.equal((db.prepare("SELECT count(*) count FROM memberships WHERE project_id=? AND user_id=?").get(project, student) as { count: number }).count, 1);
   assert.equal(getData().artifacts.length, 1);
   assert.equal(getData().applications.length, 0);
+});
+test("text microtasks accept short and numeric answers while rejecting blank or oversized submissions", () => {
+  const shortTask = String(act(lead, "save-task", "", { project, reviewer: lead, content: { ...energyTask, instructions: "Which time has the highest power reading? Answer with only the time.", deliverable: "One time label." } }).id);
+  act(lead, "publish-task", shortTask, { approved: true, expectedVersion: 1 });
+  const initial = { expectedRevision: 0, expectedStatus: "draft", taskVersion: 1 };
+  for (const response of ["", " \n ", "x".repeat(10001)]) rejects(() => act(student, "submit", shortTask, { ...initial, answers: { response } }));
+  const saved = String(act(student, "save-draft", shortTask, { ...initial, answers: { response: "" } }).id);
+  act(student, "submit", shortTask, { ...initial, answers: { response: "20:00" } });
+  act(lead, "review", saved, { revision: 1, decision: "revision_requested", feedback: "For this revision, share only the numeric power value." });
+  act(student, "submit", shortTask, { expectedRevision: 1, expectedStatus: "revision_requested", taskVersion: 1, answers: { response: "79" } });
+  const result = getData({ id: student, name: "Student", email: "student@example.test" }).submissions.find(s => s.id === saved)!;
+  assert.deepEqual(result.revisions.map(r => r.answers), [{ response: "20:00" }, { response: "79" }]);
 });
 test("planning drafts cannot be published even when missing information is cleared", () => {
   const id = String(act(lead, "save-task", "", { project, reviewer: lead, content: { ...routeTask, title: "An unpublished planning draft", format: "planning-only", missingInformation: "" } }).id);

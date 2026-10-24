@@ -17,7 +17,7 @@ export default function TextWorkspace({ task, data, action, busy, signIn, naviga
   const [response, setResponse] = useState(submission && "response" in submission.draft ? submission.draft.response : "");
   const [dirty, setDirty] = useState(false);
   const editable = !submission || ["draft", "revision_requested"].includes(submission.status);
-  const complete = response.trim().length >= 60 && response.trim().split(/\s+/).length >= 12;
+  const complete = response.trim().length > 0;
   useEffect(() => {
     const listener = (e: BeforeUnloadEvent) => { if (dirty) e.preventDefault(); };
     window.addEventListener("beforeunload", listener);
@@ -38,8 +38,8 @@ export default function TextWorkspace({ task, data, action, busy, signIn, naviga
         <section className="panel"><TaskMaterials content={content} /></section>
         <section className="panel"><h3>What your reviewer will look for</h3><p className="preserve-text">{content.criteria}</p>{content.hints && <><h3>A helpful hint</h3><p className="preserve-text">{content.hints}</p></>}</section>
       </div>
-      <section className="panel response-panel"><div className="section-eyebrow">02 · SHARE YOUR THINKING</div><h2>Your written response</h2><p>Use the supplied material, explain your reasoning, and acknowledge uncertainty. You do not need to upload anything.</p>
-        <label className="field"><span>Your response</span><textarea aria-label="Your response" aria-describedby="response-help" rows={16} maxLength={10000} value={response} disabled={!editable || busy} onChange={e => { setResponse(e.target.value); setDirty(true); }} placeholder="Here’s what I noticed, the evidence that supports it, and what I would check next…" /><small id="response-help">{response.length}/10000 characters · at least 60 characters and 12 words to submit</small></label>
+      <section className="panel response-panel"><div className="section-eyebrow">02 · YOUR ANSWER</div><h2>Your written response</h2><p>Answer the task’s question using the supplied material. A short answer is welcome; follow the task’s expected deliverable. No upload is needed.</p>
+        <label className="field"><span>Your response</span><textarea aria-label="Your response" aria-describedby="response-help" rows={4} maxLength={10000} value={response} disabled={!editable || busy} onChange={e => { setResponse(e.target.value); setDirty(true); }} placeholder="Your short answer…" /><small id="response-help">{response.length}/10000 characters · a nonempty answer is required; no minimum word count</small></label>
         <div className="save-state">{dirty ? <><Circle size={10} />Unsaved changes · save before leaving</> : submission ? <><CheckCircle2 size={13} />Saved to your account</> : <><Save size={13} />Save a draft to come back later</>}</div>
         {editable && (data.user ? <div className="response-actions"><button className="button secondary" disabled={busy} onClick={() => save(false)}><Save size={15} />Save draft</button><button className="button" disabled={busy || !complete} onClick={() => save(true)}>{busy ? <Loader2 size={15} className="spin" /> : <Send size={15} />}{submission?.status === "revision_requested" ? "Resubmit" : "Submit contribution"}</button></div> : <button className="button full-width" onClick={signIn}>Sign in to save & submit<ArrowRight size={15} /></button>)}
         <div className="human-note"><HeartHandshake size={17} /><span>Reviewed by <strong>{task.reviewer_name}</strong>, not an algorithm. Task version {submission?.task_version || task.current_version}.</span></div>

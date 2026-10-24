@@ -22,14 +22,14 @@ Use **Sign in → Try as student** and **Try as lead** in separate browser profi
 1. **Lead session:** open **Project lead space**, find **Campus Energy Detective**, and select **Add task**. New custom task fields are blank.
 2. Review the project brief, beginner level, completion time, and responsible reviewer. Leave **Allow AI to create labeled fictional demo data or source passages when needed** checked.
 3. Click **Generate starter task**. With OpenRouter configured, live AI creates an editable text task and can include a small fictional energy dataset. Without a key, a clearly labeled simulated example provides a complete synthetic table, units, occupancy context, instructions, and criteria. Both paths save only a draft.
-4. Review all fields and the synthetic-data notice. Edit and save if necessary. Check the human approval checkbox, then **Approve & publish task**. The task becomes publicly available and the project is no longer a preview. There is no automatic publication.
+4. In the manual task editor, review all fields and the synthetic-data notice. Edit and save if necessary. Check the human approval checkbox, then **Approve & publish task**. The task becomes publicly available and the project is no longer a preview. Alternatively, use the lead-dashboard quick-generation flow below for automatic publication.
 5. **Separate student session:** open that project and try the published task. Read the text/table and submit a written explanation. Save a draft and refresh to demonstrate persistence.
 6. **Lead:** inspect the captured instructions, dataset, criteria, and response. Give specific written feedback and request a revision.
 7. **Student:** revise and resubmit. **Lead:** approve the new revision. Submitted revisions and feedback remain immutable.
 8. The shared project notebook displays the approved response with the student’s name and synthetic-material provenance. Credit remains even if the student never joins.
 9. Optionally, the student applies with their approved contribution linked. The lead invites them through **Team applications**. The student accepts under **My teams**; only then is membership created.
 
-**Publishing a new project:** create and save a private project draft, explicitly publish the project, then add, save, approve, and publish its task. Project publication and task publication are separate actions.
+**Publishing a new project:** create and save a private project draft, explicitly publish the project, then either generate and auto-publish tasks from its dashboard card or use the manual task editor. Project publication and task publication are separate actions.
 
 ## Voice-to-project drafts
 
@@ -47,9 +47,17 @@ Audio is processed transiently and is not stored by this application; it is sent
 
 Previously published route-task snapshots and submitted route answers remain readable for compatibility. New custom interactive tasks are rejected on the server. The predefined task and old immutable revisions are not migrated or changed.
 
-Text submissions require at least 60 characters and 12 words; incomplete drafts can be saved. Route submissions retain their original route, explanation, and missing-information validation. No answer receives an automatic correctness score. Draft saving is explicit, not autosave: sign in before writing and save before navigation.
+Text submissions accept any nonempty answer (up to 10000 characters), including a short phrase or number; empty drafts can still be saved. Human reviewers check the task’s requested deliverable, not a minimum word count. Route submissions retain their original route, explanation, and missing-information validation. No answer receives an automatic correctness score. Draft saving is explicit, not autosave: sign in before writing and save before navigation.
 
 ## Optional OpenRouter assistance
+
+New generated tasks are minimal project-relevant microtasks: one simple question or action, roughly 2–5 minutes, answered with a few words, a number, or one short sentence. The prompt asks for tiny self-contained materials and simple review criteria, not essays or multi-part analysis. Offline preset examples follow the same scope. Existing saved tasks are not rewritten. The manual editor retains draft review/publication; quick generation bypasses that step.
+
+### One-click task generation and publication
+
+In **Project lead space**, each lead-owned project card has **Generate & publish 2–3 tasks**. Publish the project first to enable it. One live AI request chooses two tasks for a focused project or three for a broader one, with distinct independent steps and no per-task approval screen. The batch is validated and published atomically; failures add no partial tasks. Existing tasks are preserved, included as context to discourage repetition, and exact normalized title/instruction duplicates are rejected. Semantic distinctness and project relevance are prompted, not guaranteed by an AI correctness checker.
+
+The clicking lead is assigned as the human reviewer for student submissions. These tasks are marked `ai-auto`, not human-approved (`approved=0`), and immutable task versions are created at publication. Synthetic materials remain labeled fictional through submission/review/credit. Only leads can use this endpoint; closed/draft projects are rejected, and permission, project status and context are rechecked after inference. This workflow requires a live API key with no simulated auto-publication fallback. It shares the existing per-user AI budget. The UI refreshes the card with published tasks and reports failures without a confirmation/review modal.
 
 Set this **server-only** environment variable:
 
@@ -57,7 +65,7 @@ Set this **server-only** environment variable:
 OPENROUTER_API_KEY=your-key-here
 ```
 
-Models are hardcoded in `lib/openrouter.ts`: `anthropic/claude-haiku-5.5` for every text/PDF call and `openai/whisper-large-v3-turbo` for transcription. The old `OPENROUTER_MODEL` and `OPENROUTER_TRANSCRIPTION_MODEL` environment variables are no longer read. Every request includes `X-Title: Project Test Drive` for OpenRouter app attribution. Task generation, voice drafting, and résumé imports share a persistent budget of five assisted requests per user per minute (voice transcription + drafting counts as one workflow).
+Models are hardcoded in `lib/openrouter.ts`: `anthropic/claude-haiku-5.5` for every text/PDF call and `openai/whisper-large-v3-turbo` for transcription. The old `OPENROUTER_MODEL` and `OPENROUTER_TRANSCRIPTION_MODEL` environment variables are no longer read. Every request includes `X-Title: Project Test Drive` for OpenRouter app attribution. Single-task generation, auto-published batches, voice drafting, and résumé imports share a persistent budget of five assisted requests per user per minute (a batch counts as one workflow, as does voice transcription + drafting).
 
 The generator uses the selected project’s title, problem, goal, project brief, materials, beginner level, and target duration. It creates complete editable text-task drafts, not robot exercises for unrelated projects. Live task calls time out after 25 seconds; voice calls after 45 seconds per stage; résumé calls after 60 seconds. Invalid responses leave existing editor content unchanged. Manual authoring works without AI.
 
@@ -77,9 +85,9 @@ The lead may allow AI to synthesize small datasets, short source passages, or sc
 - Offline preset exercise data is labeled **Simulated fictional demo data (preset, not live AI)**. Simulation is never presented as a live inference call.
 - Provenance is saved with the task content and immutable task-version snapshot. Notices are visible in the editor, published student workspace, contribution history, review screen, and credited artifact.
 - With synthesis disabled, generation uses only supplied material and identifies missing evidence. Required missing information blocks publication.
-- Complete synthetic materials remove the need for a real dataset, but do not bypass explicit human approval of the saved task.
+- Complete synthetic materials remove the need for a real dataset. Manual task drafts still require human approval; dashboard quick-generation batches publish automatically at the lead’s request.
 
-All AI-authored decisions are suggestions about task content. Feedback, revision requests, contribution approval, application decisions, and invitations are always human actions.
+AI-generated tasks can be auto-published through the dashboard or reviewed as drafts through the manual editor. Feedback, revision requests, contribution approval, application decisions, and invitations remain human actions.
 
 ## Persistence, permissions, and state
 
